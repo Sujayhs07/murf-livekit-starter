@@ -3,9 +3,16 @@
 import { useTheme } from 'next-themes';
 import { AnimatePresence, motion } from 'motion/react';
 import { useSessionContext } from '@livekit/components-react';
+import * as React from 'react';
+import { Loader2 } from 'lucide-react';
 import type { AppConfig } from '@/app-config';
 import { AgentSessionView_01 } from '@/components/agents-ui/blocks/agent-session-view-01';
+
 import { WelcomeView } from '@/components/app/welcome-view';
+
+interface ViewControllerProps {
+  appConfig: AppConfig;
+}
 
 const MotionWelcomeView = motion.create(WelcomeView);
 const MotionSessionView = motion.create(AgentSessionView_01);
@@ -28,23 +35,41 @@ const VIEW_MOTION_PROPS = {
   },
 };
 
-interface ViewControllerProps {
-  appConfig: AppConfig;
-}
-
 export function ViewController({ appConfig }: ViewControllerProps) {
   const { isConnected, start } = useSessionContext();
   const { resolvedTheme } = useTheme();
+  const [isConnecting, setIsConnecting] = React.useState(false);
+
+  const handleStart = async () => {
+    setIsConnecting(true);
+    await start();
+  };
+
+  React.useEffect(() => {
+    if (isConnected) {
+      setIsConnecting(false);
+    }
+  }, [isConnected]);
 
   return (
     <AnimatePresence mode="wait">
+      {isConnecting && (
+        <motion.div
+          key="loading"
+          {...VIEW_MOTION_PROPS}
+          className="fixed inset-0 flex items-center justify-center"
+        >
+          <Loader2 className="h-8 w-8 animate-spin text-foreground" />
+        </motion.div>
+      )}
+
       {/* Welcome view */}
-      {!isConnected && (
+      {!isConnected && !isConnecting && (
         <MotionWelcomeView
           key="welcome"
           {...VIEW_MOTION_PROPS}
           startButtonText={appConfig.startButtonText}
-          onStartCall={start}
+          onStartCall={handleStart}
         />
       )}
       {/* Session view */}

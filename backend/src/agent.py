@@ -12,6 +12,7 @@ from livekit.agents import (
     inference,
     tokenize,
     room_io,
+    UserInputTranscribedEvent,
 )
 from livekit.plugins import murf, silero, google, deepgram, noise_cancellation
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
@@ -20,9 +21,11 @@ logger = logging.getLogger("agent")
 
 load_dotenv(".env.local")
 
-# Change this prompt to change what your voice agent does.
-# See README.md for example prompts (customer support, language tutor, receptionist).
-SYSTEM_PROMPT = """You are a friendly and efficient customer support agent for a tech company. Help users with account issues, billing questions, and product troubleshooting. Be concise, empathetic, and solution-oriented. If you don't know something, say so honestly and offer to escalate. Your responses are concise and without complex formatting, emojis, or symbols."""
+try:
+    from prompt import SYSTEM_PROMPT
+except ImportError:
+    # pyrefly: ignore [missing-import]
+    from src.prompt import SYSTEM_PROMPT
 
 
 class Assistant(Agent):
@@ -78,10 +81,10 @@ async def my_agent(ctx: JobContext):
         # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
         # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
         tts=murf.TTS(
-                voice="Anisha", 
+                voice="en-IN-anisha",
                 style="Conversation",
                 tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
-                text_pacing=True
+                text_pacing=True,
             ),
         # VAD and turn detection are used to determine when the user is speaking and when the agent should respond
         # See more at https://docs.livekit.io/agents/build/turns
@@ -91,6 +94,42 @@ async def my_agent(ctx: JobContext):
         # See more at https://docs.livekit.io/agents/build/audio/#preemptive-generation
         preemptive_generation=True,
     )
+
+    @session.on("user_input_transcribed")
+    def on_user_input_transcribed(ev: UserInputTranscribedEvent):
+        transcript = ev.transcript.strip().lower()
+        if not transcript:
+            return
+
+        # Check for Devanagari script characters (native Hindi)
+        has_devanagari = any(ord(c) >= 0x0900 and ord(c) <= 0x097F for c in transcript)
+
+        # Check for common Hinglish/Hindi romanized keywords
+        hindi_keywords = {
+            "kya", "hai", "aur", "main", "haan", "nahin", "aap", "namaste", "shukriya", 
+            "yojana", "batao", "bataiye", "samjhao", "dhan", "suraksha", "bima", "pension",
+            "mein", "ke", "ki", "se", "ko", "ka", "jo", "toh", "bhi", "ho", "kar", "raha",
+            "rahi", "rha", "rhi", "mujhe", "mera", "meri", "hum", "tum", "apna", "apni",
+            "karke", "karo", "karna", "tha", "thi", "the", "ab", "kab", "tab", "sab"
+        }
+        words = set(transcript.split())
+        has_hindi_words = not words.isdisjoint(hindi_keywords)
+
+        # Helper to safely update TTS voice
+        def _set_tts_voice(voice_id: str) -> None:
+            try:
+                session.tts.update_options(voice=voice_id)
+                logger.info(f"TTS voice switched to {voice_id}")
+            except Exception as e:  # pylint: disable=broad-except
+                logger.error(f"Failed to set TTS voice to {voice_id}: {e}")
+
+        if has_devanagari or has_hindi_words:
+            logger.info(f"Detected Hindi/Hinglish speech: '{ev.transcript}'. Switching TTS to Hindi voice.")
+            _set_tts_voice("hi-IN-anisha")
+        else:
+            logger.info(f"Detected English speech: '{ev.transcript}'. Switching TTS to English voice.")
+            _set_tts_voice("en-IN-anisha")
+
 
     # To use a realtime model instead of a voice pipeline, use the following session setup instead.
     # (Note: This is for the OpenAI Realtime API. For other providers, see https://docs.livekit.io/agents/models/realtime/))
@@ -111,20 +150,26 @@ async def my_agent(ctx: JobContext):
     # await avatar.start(session, room=ctx.room)
 
     # Start the session, which initializes the voice pipeline and warms up the models
-    await session.start(
-        agent=Assistant(),
-        room=ctx.room,
-        room_options=room_io.RoomOptions(
-            audio_input=room_io.AudioInputOptions(
-                noise_cancellation=lambda params: (
-                    noise_cancellation.BVCTelephony()
-                    if params.participant.kind
-                    == rtc.ParticipantKind.PARTICIPANT_KIND_SIP
-                    else noise_cancellation.BVC()
+    logger.info("Initializing AgentSession with voice pipeline")
+    try:
+        await session.start(
+            agent=Assistant(),
+            room=ctx.room,
+            room_options=room_io.RoomOptions(
+                audio_input=room_io.AudioInputOptions(
+                    noise_cancellation=lambda params: (
+                        noise_cancellation.BVCTelephony()
+                        if params.participant.kind
+                        == rtc.ParticipantKind.PARTICIPANT_KIND_SIP
+                        else noise_cancellation.BVC()
+                    ),
                 ),
             ),
-        ),
-    )
+        )
+        logger.info("AgentSession started successfully")
+    except Exception as e:
+        logger.error(f"Failed to start AgentSession: {e}")
+        raise
 
     # Join the room and connect to the user
     await ctx.connect()
