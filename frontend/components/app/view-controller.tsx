@@ -1,13 +1,12 @@
 'use client';
 
+import * as React from 'react';
 import { useTheme } from 'next-themes';
+import { Loader2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useSessionContext } from '@livekit/components-react';
-import * as React from 'react';
-import { Loader2 } from 'lucide-react';
 import type { AppConfig } from '@/app-config';
 import { AgentSessionView_01 } from '@/components/agents-ui/blocks/agent-session-view-01';
-
 import { WelcomeView } from '@/components/app/welcome-view';
 
 interface ViewControllerProps {
@@ -59,7 +58,7 @@ export function ViewController({ appConfig }: ViewControllerProps) {
           {...VIEW_MOTION_PROPS}
           className="fixed inset-0 flex items-center justify-center"
         >
-          <Loader2 className="h-8 w-8 animate-spin text-foreground" />
+          <Loader2 className="text-foreground h-8 w-8 animate-spin" />
         </motion.div>
       )}
 

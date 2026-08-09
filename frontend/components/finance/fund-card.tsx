@@ -1,4 +1,5 @@
-"use client";
+'use client';
+
 import React from 'react';
 
 interface FundCardProps {
@@ -13,12 +14,12 @@ interface FundCardProps {
  */
 const FundCard: React.FC<FundCardProps> = ({ name, nav, date }) => {
   return (
-    <div className="rounded-lg bg-gray-800 p-4 shadow-sm hover:shadow-md transition-shadow">
-      <h3 className="text-lg font-medium text-white mb-2 truncate" title={name}>
+    <div className="rounded-lg bg-gray-800 p-4 shadow-sm transition-shadow hover:shadow-md">
+      <h3 className="mb-2 truncate text-lg font-medium text-white" title={name}>
         {name}
       </h3>
-      <p className="text-cyan-400 text-sm">NAV: {nav}</p>
-      <p className="text-gray-400 text-xs">Updated: {date}</p>
+      <p className="text-sm text-cyan-400">NAV: {nav}</p>
+      <p className="text-xs text-gray-400">Updated: {date}</p>
     </div>
   );
 };
