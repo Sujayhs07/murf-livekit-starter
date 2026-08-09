@@ -8,14 +8,14 @@ from livekit.agents import (
     AgentSession,
     JobContext,
     JobProcess,
-    cli,
-    inference,
-    tokenize,
-    room_io,
+    RunContext,
     UserInputTranscribedEvent,
+    cli,
+    function_tool,
+    room_io,
+    tokenize,
 )
-from livekit.plugins import murf, silero, google, deepgram, noise_cancellation
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
+from livekit.plugins import deepgram, google, murf, noise_cancellation, silero
 
 logger = logging.getLogger("agent")
 
@@ -27,27 +27,74 @@ except ImportError:
     # pyrefly: ignore [missing-import]
     from src.prompt import SYSTEM_PROMPT
 
+try:
+    from db import get_caller_by_id_or_name, upsert_caller
+except ImportError:
+    # pyrefly: ignore [missing-import]
+    from src.db import get_caller_by_id_or_name, upsert_caller
+
 
 class Assistant(Agent):
-    def __init__(self) -> None:
+    def __init__(self, room: rtc.Room) -> None:
         super().__init__(instructions=SYSTEM_PROMPT)
+        self.room = room
 
-    # To add tools, use the @function_tool decorator.
-    # Here's an example that adds a simple weather tool.
-    # You also have to add `from livekit.agents import function_tool, RunContext` to the top of this file
-    # @function_tool
-    # async def lookup_weather(self, context: RunContext, location: str):
-    #     """Use this tool to look up current weather information in the given location.
-    #
-    #     If the location is not supported by the weather service, the tool will indicate this. You must tell the user the location's weather is unavailable.
-    #
-    #     Args:
-    #         location: The location to look up weather information for (e.g. city name)
-    #     """
-    #
-    #     logger.info(f"Looking up weather for {location}")
-    #
-    #     return "sunny with a temperature of 70 degrees."
+    @function_tool
+    async def lookup_caller(self, context: RunContext, name: str | None = None) -> str:
+        """Use this tool to look up a caller in the database.
+        It returns information about the caller, such as their name, language preference,
+        facts about past interactions, and when they last interacted.
+
+        Args:
+            name: The caller's name to search for (optional). If not specified, looks up by participant identity.
+        """
+        user_id = None
+        participants = list(self.room.remote_participants.values())
+        if participants:
+            user_id = participants[0].identity
+
+        logger.info(f"Looking up caller. user_id={user_id}, name={name}")
+        caller = get_caller_by_id_or_name(user_id=user_id, name=name)
+        if caller:
+            logger.info(f"Found caller: {caller}")
+            return f"Caller found: {caller}"
+
+        logger.info("Caller not found")
+        return "Caller not found."
+
+    @function_tool
+    async def save_caller_info(
+        self,
+        context: RunContext,
+        name: str,
+        language_preference: str,
+        schemes_checked: str,
+        eligibility_answers: str,
+    ) -> str:
+        """Use this tool to save or update the caller's profile and facts.
+        Only call this tool if the user gave explicit verbal consent to remember/save their data.
+
+        Args:
+            name: The caller's name.
+            language_preference: The language they prefer (e.g. Hindi, English, Hinglish).
+            schemes_checked: The schemes checked/discussed (e.g. PMJDY, PMSBY).
+            eligibility_answers: Details about eligibility criteria met or discussed.
+        """
+        user_id = f"voice_assistant_user_{name.lower()}"
+        participants = list(self.room.remote_participants.values())
+        if participants:
+            user_id = participants[0].identity
+
+        facts = {
+            "schemes_checked": schemes_checked,
+            "eligibility_answers": eligibility_answers,
+        }
+
+        logger.info(
+            f"Saving caller info. user_id={user_id}, name={name}, language={language_preference}, facts={facts}"
+        )
+        upsert_caller(user_id, name, language_preference, facts)
+        return "Caller information saved successfully."
 
 
 server = AgentServer()
@@ -72,27 +119,27 @@ async def my_agent(ctx: JobContext):
     session = AgentSession(
         # Speech-to-text (STT) is your agent's ears, turning the user's speech into text that the LLM can understand
         # See all available models at https://docs.livekit.io/agents/models/stt/
-        stt=deepgram.STT(model="nova-3", language="multi"),
+        stt=deepgram.STT(model="nova-2", language="multi"),
         # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
         # See all available models at https://docs.livekit.io/agents/models/llm/
         llm=google.LLM(
-                model="gemini-3.5-flash-lite",
-            ),
+            model="gemini-3.5-flash-lite",
+        ),
         # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
         # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
         tts=murf.TTS(
-                voice="en-IN-anisha",
-                style="Conversation",
-                tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
-                text_pacing=True,
-            ),
-        # VAD and turn detection are used to determine when the user is speaking and when the agent should respond
-        # See more at https://docs.livekit.io/agents/build/turns
-        turn_detection=MultilingualModel(),
+            voice="en-IN-anisha",
+            style="Conversation",
+            tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
+            text_pacing=True,
+        ),
         vad=ctx.proc.userdata["vad"],
         # allow the LLM to generate a response while waiting for the end of turn
         # See more at https://docs.livekit.io/agents/build/audio/#preemptive-generation
         preemptive_generation=True,
+        min_endpointing_delay=0.3,
+        max_endpointing_delay=1.0,
+        min_interruption_duration=0.2,
     )
 
     @session.on("user_input_transcribed")
@@ -106,11 +153,55 @@ async def my_agent(ctx: JobContext):
 
         # Check for common Hinglish/Hindi romanized keywords
         hindi_keywords = {
-            "kya", "hai", "aur", "main", "haan", "nahin", "aap", "namaste", "shukriya", 
-            "yojana", "batao", "bataiye", "samjhao", "dhan", "suraksha", "bima", "pension",
-            "mein", "ke", "ki", "se", "ko", "ka", "jo", "toh", "bhi", "ho", "kar", "raha",
-            "rahi", "rha", "rhi", "mujhe", "mera", "meri", "hum", "tum", "apna", "apni",
-            "karke", "karo", "karna", "tha", "thi", "the", "ab", "kab", "tab", "sab"
+            "kya",
+            "hai",
+            "aur",
+            "main",
+            "haan",
+            "nahin",
+            "aap",
+            "namaste",
+            "shukriya",
+            "yojana",
+            "batao",
+            "bataiye",
+            "samjhao",
+            "dhan",
+            "suraksha",
+            "bima",
+            "pension",
+            "mein",
+            "ke",
+            "ki",
+            "se",
+            "ko",
+            "ka",
+            "jo",
+            "toh",
+            "bhi",
+            "ho",
+            "kar",
+            "raha",
+            "rahi",
+            "rha",
+            "rhi",
+            "mujhe",
+            "mera",
+            "meri",
+            "hum",
+            "tum",
+            "apna",
+            "apni",
+            "karke",
+            "karo",
+            "karna",
+            "tha",
+            "thi",
+            "the",
+            "ab",
+            "kab",
+            "tab",
+            "sab",
         }
         words = set(transcript.split())
         has_hindi_words = not words.isdisjoint(hindi_keywords)
@@ -124,12 +215,15 @@ async def my_agent(ctx: JobContext):
                 logger.error(f"Failed to set TTS voice to {voice_id}: {e}")
 
         if has_devanagari or has_hindi_words:
-            logger.info(f"Detected Hindi/Hinglish speech: '{ev.transcript}'. Switching TTS to Hindi voice.")
+            logger.info(
+                f"Detected Hindi/Hinglish speech: '{ev.transcript}'. Switching TTS to Hindi voice."
+            )
             _set_tts_voice("hi-IN-anisha")
         else:
-            logger.info(f"Detected English speech: '{ev.transcript}'. Switching TTS to English voice.")
+            logger.info(
+                f"Detected English speech: '{ev.transcript}'. Switching TTS to English voice."
+            )
             _set_tts_voice("en-IN-anisha")
-
 
     # To use a realtime model instead of a voice pipeline, use the following session setup instead.
     # (Note: This is for the OpenAI Realtime API. For other providers, see https://docs.livekit.io/agents/models/realtime/))
@@ -153,7 +247,7 @@ async def my_agent(ctx: JobContext):
     logger.info("Initializing AgentSession with voice pipeline")
     try:
         await session.start(
-            agent=Assistant(),
+            agent=Assistant(room=ctx.room),
             room=ctx.room,
             room_options=room_io.RoomOptions(
                 audio_input=room_io.AudioInputOptions(
