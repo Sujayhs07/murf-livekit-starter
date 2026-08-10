@@ -61,7 +61,7 @@ export const WelcomeView = ({
         </Button>
       </section>
 
-      <div className="fixed bottom-5 left-0 flex w-full items-center justify-center">
+      <div className="mt-8 flex w-full items-center justify-center">
         <p className="max-w-prose pt-1 text-xs leading-5 font-semibold text-pretty text-slate-400 md:text-sm">
           Need help getting set up? Check out the{' '}
           <a

@@ -72,11 +72,33 @@ def upsert_caller(user_id, name, language_preference, facts):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # Reuse existing user_id if the name matches to prevent duplicates
-    cursor.execute("SELECT user_id FROM callers WHERE LOWER(name) = LOWER(?)", (name,))
-    row = cursor.fetchone()
-    if row:
-        user_id = row[0]
+    # Fetch existing caller to merge facts instead of overwriting
+    existing = get_caller_by_id_or_name(user_id=user_id, name=name)
+    if existing:
+        user_id = existing["user_id"]
+        old_facts = existing.get("facts", {})
+        
+        # Merge schemes_checked
+        old_schemes = set(s.strip().lower() for s in old_facts.get("schemes_checked", "").split(",") if s.strip())
+        new_schemes = set(s.strip().lower() for s in facts.get("schemes_checked", "").split(",") if s.strip())
+        merged_schemes = old_schemes.union(new_schemes)
+        facts["schemes_checked"] = ", ".join(sorted(s.upper() for s in merged_schemes))
+        
+        # Merge eligibility_answers
+        old_elig = old_facts.get("eligibility_answers", "").strip()
+        new_elig = facts.get("eligibility_answers", "").strip()
+        if old_elig and new_elig and old_elig != new_elig:
+            if new_elig not in old_elig:
+                facts["eligibility_answers"] = f"{old_elig}; {new_elig}"
+            else:
+                facts["eligibility_answers"] = old_elig
+        elif old_elig:
+            facts["eligibility_answers"] = old_elig
+
+        # Merge other facts keys
+        for k, v in old_facts.items():
+            if k not in facts:
+                facts[k] = v
 
     facts_str = json.dumps(facts)
     last_interaction = datetime.utcnow().isoformat()

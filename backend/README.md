@@ -176,6 +176,17 @@ Default is Google Gemini. To switch:
 - **Gemini (default):** Set `GOOGLE_API_KEY` in `.env.local`
 - **OpenAI:** Set `OPENAI_API_KEY`, install `livekit-agents[openai]`, and change the `llm=` argument
 
+### Financial Eligibility & Services Engine
+
+Dia is equipped with a comprehensive Indian financial rules engine and dynamic calculator suite covering 14 distinct banking and financial planning modules:
+
+- **14 Domain Modules**: Covers Banking (FD/RD), Digital Payments (UPI/QR), Loans, Investments (including cryptocurrency prices), Insurance, Pensions, Tax Planning, 9 Government Schemes, Business Finance, Forex, and Security.
+- **Real-Time Data Feeds**:
+  - **Live Exchange Rates**: Fetches live rates relative to INR from `https://open.er-api.com/v6/latest/INR` to calculate scheme conversions dynamically (e.g., converting insurance limits to USD or EUR).
+  - **Live Crypto Rates**: Fetches live Bitcoin and Ethereum prices in INR from `https://api.coingecko.com/api/v3/simple/price`.
+- **Offline Backup Data**: If the live APIs are unreachable or timeout (2.0s timeout with 3 retries), the engine falls back to a hand-built local database updated as of **August 2026** and alerts the user out loud.
+- **Dynamic Math Engines**: Includes calculators for Equated Monthly Installments (EMI) and Compound Interest returns (for products like PPF, SSY).
+
 ## Testing
 
 The project includes an eval suite based on the LiveKit Agents [testing framework](https://docs.livekit.io/agents/build/testing/):
