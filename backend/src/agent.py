@@ -1,5 +1,12 @@
 import asyncio
 import logging
+import sys
+import io
+
+# Force UTF-8 encoding on Windows to prevent UnicodeEncodeError with Devanagari (Hindi) text
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
 from dotenv import load_dotenv
 from livekit import rtc
@@ -287,6 +294,21 @@ server.setup_fnc = prewarm
 @server.rtc_session(agent_name="my-agent")
 async def my_agent(ctx: JobContext):
     # Logging setup
+    import json
+    is_outbound = False
+    recipient_name = "User"
+    call_type = "scheme_deadline"
+    custom_message = ""
+    if ctx.job.metadata:
+        try:
+            metadata = json.loads(ctx.job.metadata)
+            is_outbound = metadata.get("is_outbound", False)
+            recipient_name = metadata.get("recipient_name", "User")
+            call_type = metadata.get("call_type", "scheme_deadline")
+            custom_message = metadata.get("custom_message", "")
+            logger.info(f"Loaded job metadata: is_outbound={is_outbound}, recipient_name={recipient_name}, call_type={call_type}, custom_message={custom_message}")
+        except Exception as e:
+            logger.error(f"Failed to parse job metadata: {e}")
     # Add any other context you want in all log entries here
     ctx.log_context_fields = {
         "room": ctx.room.name,
@@ -300,14 +322,14 @@ async def my_agent(ctx: JobContext):
         # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
         # See all available models at https://docs.livekit.io/agents/models/llm/
         llm=google.LLM(
-            model="gemini-3.5-flash-lite",
+            model="gemini-3.5-flash",
         ),
         # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
         # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
         tts=murf.TTS(
-            voice="Anisha",
+            voice="en-IN-anisha",
             style="Conversation",
-            tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
+            tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=3),
             text_pacing=True,
         ),
         vad=ctx.proc.userdata["vad"],
@@ -323,6 +345,20 @@ async def my_agent(ctx: JobContext):
     def on_user_input_transcribed(ev: UserInputTranscribedEvent):
         transcript = ev.transcript.strip().lower()
         if not transcript:
+            return
+
+        # Check for stop request
+        stop_keywords = ["stop the call", "stop calling", "opt out", "stop", "cancel", "stop this call"]
+        if any(keyword in transcript for keyword in stop_keywords):
+            logger.info("User requested to stop/opt-out. Say goodbye and disconnect.")
+            async def end_call():
+                try:
+                    await session.say("Understood. I will end the call now and update your preferences. Goodbye.")
+                    await asyncio.sleep(4.0)
+                except Exception as e:
+                    logger.error(f"Error during shutdown message: {e}")
+                await ctx.room.disconnect()
+            asyncio.create_task(end_call())
             return
 
         # Check for Devanagari script characters (native Hindi)
@@ -427,14 +463,7 @@ async def my_agent(ctx: JobContext):
             agent=Assistant(room=ctx.room, session=session),
             room=ctx.room,
             room_options=room_io.RoomOptions(
-                audio_input=room_io.AudioInputOptions(
-                    noise_cancellation=lambda params: (
-                        noise_cancellation.BVCTelephony()
-                        if params.participant.kind
-                        == rtc.ParticipantKind.PARTICIPANT_KIND_SIP
-                        else noise_cancellation.BVC()
-                    ),
-                ),
+                audio_input=room_io.AudioInputOptions(),
             ),
         )
         logger.info("AgentSession started successfully")
@@ -445,13 +474,58 @@ async def my_agent(ctx: JobContext):
     # Join the room and connect to the user
     await ctx.connect()
 
-    # Automatically speak initial greeting to ask for caller's name
+    # Automatically speak initial greeting
     async def greet_user_on_entry():
-        await asyncio.sleep(1.0)
         try:
-            session.tts.update_options(voice="Anisha")
-            session.say("नमस्ते! मैं जन सहाय हूँ। मुझे अपनी फाइनेंशियल दोस्त समझिए। मैं सरकारी फाइनेंशियल स्कीम्स और सेफ बैंकिंग से जुड़े सवालों में आपकी मदद करने के लिए यहाँ हूँ। बताइए, आज मैं आपकी कैसे मदद कर सकती हूँ? क्या मैं आपका शुभ नाम जान सकती हूँ?")
-            logger.info("Spoke initial greeting to user on entry")
+            if is_outbound:
+                # Wait for any remote participant to connect/join the room
+                logger.info("Outbound call: waiting for participant to join...")
+                
+                connected_event = asyncio.Event()
+                
+                @ctx.room.on("participant_connected")
+                def on_participant_connected(participant: rtc.RemoteParticipant):
+                    logger.info(f"Participant connected event received for: {participant.identity}")
+                    connected_event.set()
+                
+                # Check if participant is already present
+                if len(ctx.room.remote_participants) > 0:
+                    logger.info("Participant already present in room.")
+                    connected_event.set()
+                
+                try:
+                    await asyncio.wait_for(connected_event.wait(), timeout=45.0)
+                except asyncio.TimeoutError:
+                    logger.warning("Timeout waiting for participant to join.")
+                    return
+                
+                logger.info("Participant joined, speaking greeting.")
+                await asyncio.sleep(2.0) # Brief delay to let the user put the phone to their ear
+                
+                session.tts.update_options(voice="en-IN-anisha")
+                if custom_message:
+                    session.say(custom_message)
+                elif call_type == "payment_reminder":
+                    session.say(
+                        "Namaste! This is Dia calling from Bharat Finance Services. We are calling to remind you that your monthly loan EMI payment is due in three days. "
+                        "You can say 'stop the call' or hang up at any time if you'd like to end this call or opt out."
+                    )
+                elif call_type == "itr_deadline":
+                    session.say(
+                        "Namaste! This is Dia calling from the National Financial Literacy Council of India. We are calling to remind you that the deadline for filing your Income Tax Return is approaching on July thirty-first. "
+                        "You can say 'stop the call' or hang up at any time if you'd like to end this call or opt out."
+                    )
+                else: # default scheme_deadline
+                    session.say(
+                        "Namaste! This is Dia calling from the National Financial Literacy Council of India regarding the approaching deadline for the PM-Kisan scheme. "
+                        "You can say 'stop the call' or hang up at any time if you'd like to end this call or opt out."
+                    )
+                logger.info(f"Spoke outbound welcome greeting for {call_type} on entry")
+            else:
+                await asyncio.sleep(1.0)
+                session.tts.update_options(voice="hi-IN-anisha")
+                session.say("नमस्ते! मैं दीया हूँ। मुझे अपनी फाइनेंशियल दोस्त समझिए। मैं सरकारी फाइनेंशियल स्कीम्स और सेफ बैंकिंग से जुड़े सवालों में आपकी मदद करने के लिए यहाँ हूँ। बताइए, आज मैं आपकी कैसे मदद कर सकती हूँ? क्या मैं आपका शुभ नाम जान सकती हूँ?")
+                logger.info("Spoke inbound welcome greeting to user on entry")
         except Exception as err:
             logger.error(f"Failed to speak welcome greeting: {err}")
 

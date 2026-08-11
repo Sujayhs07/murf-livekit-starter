@@ -44,6 +44,8 @@ export async function POST(req: Request) {
       );
     }
 
+    console.log('Room Config generated for token:', JSON.stringify(roomConfig));
+
     // Generate participant token
     const participantName = 'user';
     const participantIdentity = `voice_assistant_user_${Math.floor(Math.random() * 10_000)}`;
