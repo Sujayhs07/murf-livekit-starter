@@ -15,6 +15,19 @@ function FinanceDashboard() {
   const [transactions, setTransactions] = useState<
     { id: number; type: 'add' | 'withdraw'; amount: number; time: string }[]
   >([]);
+  const [escalations, setEscalations] = useState<
+    {
+      reference_id: string;
+      reason: string;
+      summary: string;
+      what_was_checked: string;
+      urgency: string;
+      language: string;
+      preferred_followup: string;
+      status: string;
+      timestamp: string;
+    }[]
+  >([]);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = async () => {
@@ -24,6 +37,7 @@ function FinanceDashboard() {
         const data = await res.json();
         setBalance(data.balance);
         setTransactions(data.transactions);
+        setEscalations(data.escalations || []);
       }
     } catch (err) {
       console.error('Error fetching finance data:', err);
@@ -137,6 +151,41 @@ function FinanceDashboard() {
                 >
                   {tx.type === 'add' ? '+' : '-'} ₹{tx.amount.toLocaleString('en-IN')}
                 </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 border-t border-slate-200/60 pt-6">
+        <h3 className="text-md mb-3 font-bold text-slate-700">Support Tickets & Escalations</h3>
+        {escalations.length === 0 ? (
+          <p className="text-sm text-slate-400 italic">No active support requests.</p>
+        ) : (
+          <div className="max-h-60 space-y-3 overflow-y-auto pr-2 animate-fadeIn">
+            {escalations.map((esc) => (
+              <div
+                key={esc.reference_id}
+                className="rounded-lg border border-slate-200/80 bg-slate-50/55 p-3 text-sm shadow-sm hover:border-emerald-200 transition-all"
+              >
+                <div className="flex items-center justify-between font-bold mb-1">
+                  <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">{esc.reference_id}</span>
+                  <span className={`px-2 py-0.5 rounded text-xs tracking-wider uppercase ${
+                    esc.urgency === 'EMERGENCY' ? 'bg-red-100 text-red-700 border border-red-200 font-extrabold animate-pulse' :
+                    esc.urgency === 'HIGH' ? 'bg-orange-100 text-orange-700 border border-orange-200' :
+                    esc.urgency === 'MEDIUM' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                    'bg-slate-100 text-slate-700 border border-slate-200'
+                  }`}>
+                    {esc.urgency} Urgency
+                  </span>
+                </div>
+                <div className="text-xs text-slate-500 mb-2 font-medium">{esc.timestamp} • Status: <span className="font-semibold text-slate-700">{esc.status}</span></div>
+                <div className="space-y-1 text-slate-700">
+                  <div><strong>Reason:</strong> {esc.reason.replace('_', ' ').toUpperCase()}</div>
+                  <div><strong>Language:</strong> {esc.language}</div>
+                  <div><strong>Follow-up:</strong> {esc.preferred_followup}</div>
+                  <div className="text-slate-600 mt-1 bg-white/70 p-2 rounded border border-slate-100 text-xs italic">{esc.summary}</div>
+                </div>
               </div>
             ))}
           </div>

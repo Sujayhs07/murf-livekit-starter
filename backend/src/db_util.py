@@ -2,6 +2,12 @@ import sqlite3
 import json
 import os
 import sys
+import io
+
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
+
 
 DB_CALLERS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "callers.db")
 DB_DASHBOARD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dashboard.db")
@@ -41,11 +47,9 @@ Commands for Callers Memory (callers.db):
   delete-caller <name>             Delete a specific caller profile by name
 
 Commands for Frontend Dashboard (dashboard.db):
-  show-dashboard                   Show current profile and transaction balance
+  show-dashboard                   Show current transaction balance
   clear-transactions               Clear all transactions (resets balance to default 12,345)
   set-balance <amount>             Set a clean custom balance in the dashboard
-  update-profile <name> <email> <phone>
-                                   Update user profile details
 """)
 
 
@@ -91,24 +95,11 @@ def main():
         print(f"Deleted caller '{name}' from memory.")
 
     elif cmd == "show-dashboard":
-        prof = execute_query(
-            DB_DASHBOARD,
-            "SELECT name, email, phone, is_logged_in FROM profile WHERE id = 1",
-            fetch=True,
-        )
         txs = execute_query(
             DB_DASHBOARD,
             "SELECT id, type, amount, timestamp FROM transactions",
             fetch=True,
         )
-
-        if prof:
-            print("\n--- Dashboard Profile ---")
-            print(f"Name: {prof[0][0]}")
-            print(f"Email: {prof[0][1]}")
-            print(f"Phone: {prof[0][2]}")
-            print(f"Logged In: {bool(prof[0][3])}")
-
         balance = 12345
         if txs:
             print(f"\n--- Dashboard Transactions ({len(txs)} records) ---")
@@ -151,17 +142,7 @@ def main():
         except ValueError:
             print("Please provide a valid numeric value.")
 
-    elif cmd == "update-profile":
-        if len(sys.argv) < 5:
-            print("Usage: python src/db_util.py update-profile <name> <email> <phone>")
-            sys.exit(1)
-        name, email, phone = sys.argv[2], sys.argv[3], sys.argv[4]
-        execute_query(
-            DB_DASHBOARD,
-            "UPDATE profile SET name = ?, email = ?, phone = ? WHERE id = 1",
-            (name, email, phone),
-        )
-        print("Successfully updated dashboard profile in database.")
+    # update-profile removed
 
     else:
         print(f"Unknown command: {cmd}")

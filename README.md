@@ -122,6 +122,22 @@ You should now see the voice agent UI. Click **Start talking**, allow microphone
 
 ---
 
+## Human Support Escalation & Multilingual Support (Day 7)
+
+Finora AI (Dia) includes an advanced human support escalation protocol and natively supports both **English** and **Hindi**:
+
+- **Multilingual Support**: Automatically detects whether the caller is speaking English or Hindi/Hinglish. It replies in the speaker's active language and script (Hindi → Devanagari script, English → English script). Uses the locale-independent `"Anisha"` Murf voice to deliver native accentuation without hardcoded locale keys.
+- **Escalation Triggers**:
+  - **Possible Fraud**: unauthorized transactions, suspected scams, compromised card/account, suspicious financial activity.
+  - **Manual Decision**: special exceptions, complicated disputes, caller explicitly requesting a human, or Dia missing reliable information.
+- **Permission & Consent**: Dia will never create a support ticket without explicit verbal confirmation. Confirmatory phrases (like *"Yes"*, *"Sure"*, *"हां कर दीजिए"*) trigger ticket generation, while refusal gracefully cancels it.
+- **Sensitive Data Exclusion**: Filters out PINs, OTPs, CVVs, passwords, full credit card numbers, and bank account numbers from all summaries, logs, database entries, and Discord messages.
+- **Discord Notification Webhook**: Posts structured, human-readable escalation requests to a Discord channel via `DISCORD_WEBHOOK_URL`.
+- **Local Fallback Persistence**: If the Discord network request fails or is missing, the ticket is saved locally in the SQLite database and displays a sequential/random reference ID (`FIN-YYYY-XXXX`) to the caller.
+- **Interactive UI Dashboard**: Displays active escalations in real-time under a dedicated **Support Tickets & Escalations** section in the frontend Finance Dashboard.
+
+---
+
 ## Deploy
 
 Want to deploy this beyond localhost? You'll need to deploy **two services**: the backend agent and the frontend. Both must use the same LiveKit project.

@@ -187,6 +187,12 @@ Dia is equipped with a comprehensive Indian financial rules engine and dynamic c
 - **Offline Backup Data**: If the live APIs are unreachable or timeout (2.0s timeout with 3 retries), the engine falls back to a hand-built local database updated as of **August 2026** and alerts the user out loud.
 - **Dynamic Math Engines**: Includes calculators for Equated Monthly Installments (EMI) and Compound Interest returns (for products like PPF, SSY).
 
+### Human Support Escalation & Multilingual Support (Day 7)
+Dia natively supports English & Hindi language transcription, processing, and voice delivery, paired with structured ticket escalation:
+- **Multilingual Delivery**: Autodetects user spoken language, switching target context properties. Prompt guidelines specify replying in the exact native script (Hindi → Devanagari, English → English). TTS voice initializes with locale-independent `"Anisha"`, utilizing a sentence tokenizer delay of `2` for fluid turns.
+- **Support Escalation (`create_escalation` tool)**: Validates details, generates a random unique ticket Reference ID (`FIN-YYYY-XXXX`), strips out security-sensitive credentials (PIN, OTP, passwords, CVV), commits the ticket to `dashboard.db`, and posts it to a Discord channel via Webhook.
+- **Robust Local Fallback**: If network transport fails or the webhook environment variable is missing, the ticket is saved locally to the SQLite DB and returns the real reference ID to the client without crashing.
+
 ## Testing
 
 The project includes an eval suite based on the LiveKit Agents [testing framework](https://docs.livekit.io/agents/build/testing/):

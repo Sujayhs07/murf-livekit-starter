@@ -53,6 +53,8 @@ class Assistant(Agent):
         super().__init__(instructions=SYSTEM_PROMPT)
         self.room = room
         self.agent_session = session
+        self.current_language = "English"  # Default to Hindi
+
 
     @function_tool
     async def lookup_financial_service(
@@ -198,18 +200,21 @@ class Assistant(Agent):
         if caller:
             logger.info(f"Found caller: {caller}")
             # Restore user's language voice setting
-            if self.agent_session:
-                lang = caller.get("language_preference", "").lower()
-                if "hindi" in lang or "hinglish" in lang:
+            lang = caller.get("language_preference", "").lower()
+            if "hindi" in lang or "hinglish" in lang:
+                self.current_language = "Hindi"
+                if self.agent_session:
                     try:
-                        self.agent_session.tts.update_options(voice="hi-IN-anisha")
-                        logger.info("Restored database language preference: hi-IN-anisha (Hindi/Hinglish)")
+                        self.agent_session.tts.update_options(voice="Anisha")
+                        logger.info("Restored database language preference: Anisha")
                     except Exception as e:
                         logger.error(f"Failed to update TTS voice: {e}")
-                else:
+            else:
+                self.current_language = "English"
+                if self.agent_session:
                     try:
-                        self.agent_session.tts.update_options(voice="en-IN-anisha")
-                        logger.info("Restored database language preference: en-IN-anisha (English)")
+                        self.agent_session.tts.update_options(voice="Anisha")
+                        logger.info("Restored database language preference: Anisha")
                     except Exception as e:
                         logger.error(f"Failed to update TTS voice: {e}")
             return f"Caller found: {caller}"
@@ -276,6 +281,144 @@ class Assistant(Agent):
             
         return status
 
+    @function_tool
+    async def create_escalation(
+        self,
+        context: RunContext,
+        reason: str,
+        summary: str,
+        what_was_checked: str,
+        urgency: str,
+        language: str,
+        preferred_followup: str
+    ) -> str:
+        """Use this tool to escalate the caller's issue to a human support representative.
+        Only run this tool after explaining the escalation, what is shared, what is excluded, and getting explicit caller consent.
+
+        Args:
+            reason: The reason for the escalation (must be either 'possible_fraud' or 'human_decision_required').
+            summary: A brief, plain-text summary of the issue. Sensitive details will be filtered out.
+            what_was_checked: What steps/information were verified or handled by Dia prior to escalation.
+            urgency: Urgency level (LOW, MEDIUM, HIGH, EMERGENCY).
+            language: The language preference of the caller (must be exactly 'English' or 'Hindi').
+            preferred_followup: Caller's preferred followup channel (e.g. phone, email, sms).
+        """
+        logger.info("[ESCALATION] Condition detected")
+        logger.info("[ESCALATION] Permission received")
+        
+        # Validation
+        if not reason or not summary or not what_was_checked or not urgency or not language or not preferred_followup:
+            return "Error: All fields are required to submit an escalation request."
+            
+        # Clean sensitive information
+        import re
+        def sanitize_sensitive_info(text: str) -> str:
+            if not text:
+                return text
+            # Replace card/account numbers (12-19 digits)
+            text = re.sub(r'\b\d{12,19}\b', 'Sensitive information excluded.', text)
+            # Keywords checks
+            keywords = ["otp", "pin", "password", "cvv", "upi pin", "card number", "bank account", "account number", "passcode"]
+            for kw in keywords:
+                text = re.sub(rf'(?i)({kw}\s*(?:number|code|is|:|value|=|\s)\s*)([a-zA-Z0-9]+)', r'\1Sensitive information excluded.', text)
+            # Standalone digits if they resemble OTPs/PINs
+            text = re.sub(r'\b\d{4,6}\b', 'Sensitive information excluded.', text)
+            return text
+
+        clean_summary = sanitize_sensitive_info(summary)
+        clean_what_checked = sanitize_sensitive_info(what_was_checked)
+        logger.info("[ESCALATION] Sensitive information filtered")
+        
+        # Generate Reference ID
+        import os
+        from datetime import datetime
+        import sqlite3
+        
+        try:
+            from db_dashboard import DB_PATH as DASHBOARD_DB_PATH, init_db as init_dashboard_db, add_escalation as save_local_escalation
+        except ImportError:
+            # pyrefly: ignore [missing-import]
+            from src.db_dashboard import DB_PATH as DASHBOARD_DB_PATH, init_db as init_dashboard_db, add_escalation as save_local_escalation
+            
+        try:
+            init_dashboard_db()
+            current_year = datetime.now().year
+            prefix = f"FIN-{current_year}-"
+            
+            import random
+            conn = sqlite3.connect(DASHBOARD_DB_PATH)
+            cursor = conn.cursor()
+            while True:
+                random_val = random.randint(1, 9999)
+                ref_id = f"{prefix}{random_val:04d}"
+                cursor.execute("SELECT 1 FROM escalations WHERE reference_id = ?", (ref_id,))
+                if not cursor.fetchone():
+                    break
+            conn.close()
+        except Exception as e:
+            import random
+            logger.error(f"Failed to generate random reference ID: {e}")
+            ref_id = f"FIN-{datetime.now().year}-{random.randint(1, 9999):04d}"
+
+        logger.info(f"[ESCALATION] Reference generated: {ref_id}")
+        
+        # Save escalation locally to SQLite
+        local_saved = False
+        try:
+            save_local_escalation(
+                reference_id=ref_id,
+                reason=reason,
+                summary=clean_summary,
+                what_was_checked=clean_what_checked,
+                urgency=urgency,
+                language=language,
+                preferred_followup=preferred_followup,
+                status="OPEN"
+            )
+            local_saved = True
+            logger.info(f"[ESCALATION] Saved locally to database: {ref_id}")
+        except Exception as err:
+            logger.error(f"[ESCALATION] Failed to save escalation locally: {err}")
+            
+        # Send Discord notification
+        discord_sent = False
+        discord_url = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
+        
+        if discord_url:
+            try:
+                discord_payload = {
+                    "content": f"🚨 **FINORA AI — HUMAN ESCALATION**\n\n"
+                               f"**Reference ID:**\n{ref_id}\n\n"
+                               f"**Reason:**\n{reason.replace('_', ' ').title()}\n\n"
+                               f"**Summary:**\n{clean_summary}\n\n"
+                               f"**What Dia Checked:**\n{clean_what_checked}\n\n"
+                               f"**Urgency:**\n{urgency.upper()}\n\n"
+                               f"**Language:**\n{language}\n\n"
+                               f"**Preferred Follow-up:**\n{preferred_followup.capitalize()}\n\n"
+                               f"**Status:**\nOPEN\n\n"
+                               f"**Sensitive Information:**\nExcluded"
+                }
+                
+                import aiohttp
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(discord_url, json=discord_payload) as resp:
+                        if resp.status in [200, 204]:
+                            discord_sent = True
+                            logger.info("[ESCALATION] Discord notification sent")
+                            logger.info("[ESCALATION] Status: OPEN")
+                        else:
+                            resp_text = await resp.text()
+                            logger.error(f"[ESCALATION] Discord webhook returned status {resp.status}: {resp_text}")
+            except Exception as e:
+                logger.error(f"[ESCALATION] Failed to send Discord notification: {e}")
+        else:
+            logger.warning("[ESCALATION] Discord Webhook URL is not configured.")
+
+        if discord_sent or local_saved:
+            return f"Success: Escalation created. Reference ID: {ref_id}. Status: OPEN."
+        else:
+            return "Error: Could not create escalation request due to database and network failures."
+
 def status_helper(ticker: str) -> str:
     return "INR" if ticker.endswith(".NS") or ticker in ["^NSEI", "^BSESN"] else "USD"
 
@@ -318,18 +461,18 @@ async def my_agent(ctx: JobContext):
     session = AgentSession(
         # Speech-to-text (STT) is your agent's ears, turning the user's speech into text that the LLM can understand
         # See all available models at https://docs.livekit.io/agents/models/stt/
-        stt=deepgram.STT(model="nova-2", language="multi"),
+        stt=deepgram.STT(model="nova-3", language="multi"),
         # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
         # See all available models at https://docs.livekit.io/agents/models/llm/
         llm=google.LLM(
-            model="gemini-3.5-flash",
+            model="gemini-3.5-flash-lite",
         ),
         # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
         # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
         tts=murf.TTS(
-            voice="en-IN-anisha",
+            voice="Anisha",
             style="Conversation",
-            tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=3),
+            tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
             text_pacing=True,
         ),
         vad=ctx.proc.userdata["vad"],
@@ -429,14 +572,16 @@ async def my_agent(ctx: JobContext):
 
         if has_devanagari or has_hindi_words:
             logger.info(
-                f"Detected Hindi/Hinglish speech: '{ev.transcript}'. Switching TTS to Hindi voice."
+                f"Detected Hindi/Hinglish speech: '{ev.transcript}'. Setting language to Hindi."
             )
-            _set_tts_voice("hi-IN-anisha")
+            assistant.current_language = "Hindi"
+            _set_tts_voice("Anisha")
         else:
             logger.info(
-                f"Detected English speech: '{ev.transcript}'. Switching TTS to English voice."
+                f"Detected English speech: '{ev.transcript}'. Setting language to English."
             )
-            _set_tts_voice("en-IN-anisha")
+            assistant.current_language = "English"
+            _set_tts_voice("Anisha")
 
     # To use a realtime model instead of a voice pipeline, use the following session setup instead.
     # (Note: This is for the OpenAI Realtime API. For other providers, see https://docs.livekit.io/agents/models/realtime/))
@@ -458,9 +603,10 @@ async def my_agent(ctx: JobContext):
 
     # Start the session, which initializes the voice pipeline and warms up the models
     logger.info("Initializing AgentSession with voice pipeline")
+    assistant = Assistant(room=ctx.room, session=session)
     try:
         await session.start(
-            agent=Assistant(room=ctx.room, session=session),
+            agent=assistant,
             room=ctx.room,
             room_options=room_io.RoomOptions(
                 audio_input=room_io.AudioInputOptions(),
@@ -502,7 +648,7 @@ async def my_agent(ctx: JobContext):
                 logger.info("Participant joined, speaking greeting.")
                 await asyncio.sleep(2.0) # Brief delay to let the user put the phone to their ear
                 
-                session.tts.update_options(voice="en-IN-anisha")
+                session.tts.update_options(voice="Anisha")
                 if custom_message:
                     session.say(custom_message)
                 elif call_type == "payment_reminder":
@@ -523,7 +669,7 @@ async def my_agent(ctx: JobContext):
                 logger.info(f"Spoke outbound welcome greeting for {call_type} on entry")
             else:
                 await asyncio.sleep(1.0)
-                session.tts.update_options(voice="hi-IN-anisha")
+                session.tts.update_options(voice="Anisha")
                 session.say("नमस्ते! मैं दीया हूँ। मुझे अपनी फाइनेंशियल दोस्त समझिए। मैं सरकारी फाइनेंशियल स्कीम्स और सेफ बैंकिंग से जुड़े सवालों में आपकी मदद करने के लिए यहाँ हूँ। बताइए, आज मैं आपकी कैसे मदद कर सकती हूँ? क्या मैं आपका शुभ नाम जान सकती हूँ?")
                 logger.info("Spoke inbound welcome greeting to user on entry")
         except Exception as err:
