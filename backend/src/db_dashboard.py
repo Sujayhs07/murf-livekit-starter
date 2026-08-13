@@ -37,6 +37,22 @@ def init_db():
             timestamp TEXT
         )
     """)
+
+    # Calls table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS calls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            call_id TEXT UNIQUE,
+            started_at TEXT,
+            ended_at TEXT,
+            duration_seconds INTEGER,
+            language TEXT,
+            channel TEXT,
+            outcome TEXT,
+            failure_reason TEXT,
+            success_reason TEXT
+        )
+    """)
     
     conn.commit()
     conn.close()
@@ -115,6 +131,72 @@ def add_escalation(reference_id, reason, summary, what_was_checked, urgency, lan
     conn.commit()
     conn.close()
 
+def add_call_start(call_id, language="English", channel="browser"):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    started_at = datetime.now().isoformat()
+    cursor.execute("""
+        INSERT INTO calls (call_id, started_at, language, channel, outcome)
+        VALUES (?, ?, ?, ?, 'IN_PROGRESS')
+    """, (call_id, started_at, language, channel))
+    conn.commit()
+    conn.close()
+
+def update_call_end(call_id, duration_seconds, outcome, language, failure_reason=None, success_reason=None):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    ended_at = datetime.now().isoformat()
+    cursor.execute("""
+        UPDATE calls
+        SET ended_at = ?, duration_seconds = ?, outcome = ?, language = ?, failure_reason = ?, success_reason = ?
+        WHERE call_id = ?
+    """, (ended_at, int(duration_seconds), outcome, language, failure_reason, success_reason, call_id))
+    conn.commit()
+    conn.close()
+
+def get_analytics():
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM calls WHERE outcome IN ('SUCCESS', 'FAILED')")
+    total_calls = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM calls WHERE outcome = 'SUCCESS'")
+    successful_calls = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM calls WHERE outcome = 'FAILED'")
+    failed_calls = cursor.fetchone()[0]
+    conn.close()
+    return {
+        "total_calls": total_calls,
+        "successful_calls": successful_calls,
+        "failed_calls": failed_calls
+    }
+
+def get_calls_history():
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT call_id, started_at, duration_seconds, language, channel, outcome 
+        FROM calls 
+        WHERE outcome IN ('SUCCESS', 'FAILED')
+        ORDER BY started_at DESC
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+    history = []
+    for r in rows:
+        history.append({
+            "call_id": r[0],
+            "started_at": r[1],
+            "duration_seconds": r[2],
+            "language": r[3],
+            "channel": r[4],
+            "outcome": r[5]
+        })
+    return history
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(json.dumps(get_data()))
@@ -123,6 +205,10 @@ if __name__ == "__main__":
     cmd = sys.argv[1]
     if cmd == "get":
         print(json.dumps(get_data()))
+    elif cmd == "get_analytics":
+        print(json.dumps(get_analytics()))
+    elif cmd == "get_calls":
+        print(json.dumps(get_calls_history()))
     elif cmd == "add_transaction" and len(sys.argv) >= 4:
         add_transaction(sys.argv[2], sys.argv[3])
         print(json.dumps({"status": "success"}))

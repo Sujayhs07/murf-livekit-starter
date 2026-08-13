@@ -47,6 +47,13 @@ except ImportError:
     # pyrefly: ignore [missing-import]
     from src import schemes_data
 
+try:
+    from db_dashboard import add_call_start, update_call_end
+except ImportError:
+    # pyrefly: ignore [missing-import]
+    from src.db_dashboard import add_call_start, update_call_end
+
+
 
 class Assistant(Agent):
     def __init__(self, room: rtc.Room | None = None, session: AgentSession | None = None) -> None:
@@ -54,6 +61,11 @@ class Assistant(Agent):
         self.room = room
         self.agent_session = session
         self.current_language = "English"  # Default to Hindi
+        self.call_id = None
+        self.call_success = False
+        self.success_reason = None
+        self.failure_reason = "USER_HANGUP"
+
 
 
     @function_tool
@@ -129,6 +141,9 @@ class Assistant(Agent):
                 conv_msg = f" Note: Using offline backup exchange rate 1 INR = {rate} {curr} due to connection timeout."
 
         output = f"Service: {service.replace('_', ' ').capitalize()}\nDescription: {desc}\nRates/Charges: {rates}{conv_msg}\nEligibility: {elig}\nRequired Documents Checklist: {checklist}"
+        self.call_success = True
+        self.success_reason = "LOOKUP_FINANCIAL_SERVICE"
+        self.failure_reason = None
         return output
 
     @function_tool
@@ -154,6 +169,10 @@ class Assistant(Agent):
         """
         logger.info(f"Running financial calculator. type={tool_type}, principal={principal}, rate={interest_rate}, tenure={tenure_years}, monthly_income={monthly_income}")
         ttype = tool_type.lower().strip()
+        if ttype in ["emi", "compound_interest"]:
+            self.call_success = True
+            self.success_reason = "CALCULATE_FINANCIALS"
+            self.failure_reason = None
         if ttype == "emi":
             res = schemes_data.calculate_loan_emi(principal, interest_rate, tenure_years)
             emi = res['monthly_emi']
@@ -254,6 +273,9 @@ class Assistant(Agent):
             f"Saving caller info. user_id={user_id}, name={name}, language={language_preference}, facts={facts}"
         )
         upsert_caller(user_id, name, language_preference, facts)
+        self.call_success = True
+        self.success_reason = "SAVE_CALLER_INFO"
+        self.failure_reason = None
         return "Caller information saved successfully."
 
     @function_tool
@@ -279,6 +301,9 @@ class Assistant(Agent):
         if is_fallback:
             status = "Notice: Live connection to stock exchange is offline. " + status
             
+        self.call_success = True
+        self.success_reason = "LOOKUP_STOCK_MARKET"
+        self.failure_reason = None
         return status
 
     @function_tool
@@ -415,8 +440,13 @@ class Assistant(Agent):
             logger.warning("[ESCALATION] Discord Webhook URL is not configured.")
 
         if discord_sent or local_saved:
+            self.call_success = True
+            self.success_reason = "ESCALATION_SUCCESS"
+            self.failure_reason = None
             return f"Success: Escalation created. Reference ID: {ref_id}. Status: OPEN."
         else:
+            self.call_success = False
+            self.failure_reason = "ESCALATION_FAILURE"
             return "Error: Could not create escalation request due to database and network failures."
 
 def status_helper(ticker: str) -> str:
@@ -604,6 +634,32 @@ async def my_agent(ctx: JobContext):
     # Start the session, which initializes the voice pipeline and warms up the models
     logger.info("Initializing AgentSession with voice pipeline")
     assistant = Assistant(room=ctx.room, session=session)
+    
+    # Generate unique call ID
+    import random
+    from datetime import datetime
+    year = datetime.now().year
+    call_id = f"CALL-{year}-{random.randint(1000, 9999)}"
+    assistant.call_id = call_id
+    
+    try:
+        add_call_start(call_id=call_id, language="English", channel="browser")
+    except Exception as e:
+        logger.error(f"Failed to record call start in db: {e}")
+        
+    start_time = datetime.now()
+    disconnect_event = asyncio.Event()
+    
+    @ctx.room.on("disconnected")
+    def on_room_disconnected():
+        logger.info("Room disconnected event received")
+        disconnect_event.set()
+        
+    @ctx.room.on("participant_disconnected")
+    def on_participant_disconnected(participant: rtc.RemoteParticipant):
+        logger.info(f"Participant disconnected: {participant.identity}")
+        disconnect_event.set()
+        
     try:
         await session.start(
             agent=assistant,
@@ -613,69 +669,111 @@ async def my_agent(ctx: JobContext):
             ),
         )
         logger.info("AgentSession started successfully")
-    except Exception as e:
-        logger.error(f"Failed to start AgentSession: {e}")
-        raise
+        
+        # Join the room and connect to the user
+        await ctx.connect()
 
-    # Join the room and connect to the user
-    await ctx.connect()
+        # Automatically speak initial greeting
+        async def greet_user_on_entry():
+            try:
+                if is_outbound:
+                    # Wait for any remote participant to connect/join the room
+                    logger.info("Outbound call: waiting for participant to join...")
+                    
+                    connected_event = asyncio.Event()
+                    
+                    @ctx.room.on("participant_connected")
+                    def on_participant_connected(participant: rtc.RemoteParticipant):
+                        logger.info(f"Participant connected event received for: {participant.identity}")
+                        connected_event.set()
+                    
+                    # Check if participant is already present
+                    if len(ctx.room.remote_participants) > 0:
+                        logger.info("Participant already present in room.")
+                        connected_event.set()
+                    
+                    try:
+                        await asyncio.wait_for(connected_event.wait(), timeout=45.0)
+                    except asyncio.TimeoutError:
+                        logger.warning("Timeout waiting for participant to join.")
+                        return
+                    
+                    logger.info("Participant joined, speaking greeting.")
+                    await asyncio.sleep(2.0) # Brief delay to let the user put the phone to their ear
+                    
+                    session.tts.update_options(voice="Anisha")
+                    if custom_message:
+                        session.say(custom_message)
+                    elif call_type == "payment_reminder":
+                        session.say(
+                            "Namaste! This is Dia calling from Bharat Finance Services. We are calling to remind you that your monthly loan EMI payment is due in three days. "
+                            "You can say 'stop the call' or hang up at any time if you'd like to end this call or opt out."
+                        )
+                    elif call_type == "itr_deadline":
+                        session.say(
+                            "Namaste! This is Dia calling from the National Financial Literacy Council of India. We are calling to remind you that the deadline for filing your Income Tax Return is approaching on July thirty-first. "
+                            "You can say 'stop the call' or hang up at any time if you'd like to end this call or opt out."
+                        )
+                    else: # default scheme_deadline
+                        session.say(
+                            "Namaste! This is Dia calling from the National Financial Literacy Council of India regarding the approaching deadline for the PM-Kisan scheme. "
+                            "You can say 'stop the call' or hang up at any time if you'd like to end this call or opt out."
+                        )
+                    logger.info(f"Spoke outbound welcome greeting for {call_type} on entry")
+                else:
+                    await asyncio.sleep(1.0)
+                    session.tts.update_options(voice="Anisha")
+                    
+                    active_tab = "voice"
+                    participants = list(ctx.room.remote_participants.values())
+                    if participants:
+                        p = participants[0]
+                        if p.metadata:
+                            try:
+                                import json
+                                meta = json.loads(p.metadata)
+                                active_tab = meta.get("activeTab", "voice")
+                            except Exception:
+                                pass
+                                
+                    logger.info(f"Customized greeting based on active tab: {active_tab}")
+                    if active_tab == "finance":
+                        session.say("नमस्ते! मैं दीया हूँ। मैं देख रही हूँ कि आप फाइनेंस डैशबोर्ड पर हैं। यहाँ आप अपना बैलेंस देख सकते हैं और ट्रांजैक्शन कर सकते हैं। क्या आप किसी ट्रांजैक्शन या स्कीम के बारे में जानकारी चाहते हैं?")
+                    elif active_tab == "analytics":
+                        session.say("नमस्ते! मैं दीया हूँ। मैं देख रही हूँ कि आप कॉल एनालिटिक्स पेज पर हैं। यहाँ आप हमारी बातचीत की परफॉर्मेंस और कॉल रिकॉर्ड्स देख सकते हैं। क्या आप इसके बारे में कुछ जानना चाहते हैं?")
+                    elif active_tab == "help":
+                        session.say("नमस्ते! मैं दीया हूँ। मैं देख रही हूँ कि आप हेल्प पेज पर हैं। यहाँ आप मेरे फीचर्स और सपोर्ट गाइड देख सकते हैं। बताइए, आज मैं आपके कौन से सवाल का जवाब दूँ?")
+                    else:
+                        session.say("नमस्ते! मैं दीया हूँ। मुझे अपनी फाइनेंशियल दोस्त समझिए। मैं सरकारी फाइनेंशियल स्कीम्स और सेफ बैंकिंग से जुड़े सवालों में आपकी मदद करने के लिए यहाँ हूँ। बताइए, आज मैं आपकी कैसे मदद कर सकती हूँ? क्या मैं आपका शुभ नाम जान सकती हूँ?")
+                    logger.info("Spoke inbound welcome greeting to user on entry")
+            except Exception as err:
+                logger.error(f"Failed to speak welcome greeting: {err}")
 
-    # Automatically speak initial greeting
-    async def greet_user_on_entry():
+        asyncio.create_task(greet_user_on_entry())
+        
+        # Wait for the room disconnect event
+        await disconnect_event.wait()
+        
+    finally:
+        end_time = datetime.now()
+        duration = int((end_time - start_time).total_seconds())
+        outcome = "SUCCESS" if assistant.call_success else "FAILED"
+        lang = assistant.current_language
+        failure_reason = assistant.failure_reason if not assistant.call_success else None
+        success_reason = assistant.success_reason if assistant.call_success else None
+        
+        logger.info(f"Recording call end: {call_id}, duration={duration}s, outcome={outcome}, lang={lang}")
         try:
-            if is_outbound:
-                # Wait for any remote participant to connect/join the room
-                logger.info("Outbound call: waiting for participant to join...")
-                
-                connected_event = asyncio.Event()
-                
-                @ctx.room.on("participant_connected")
-                def on_participant_connected(participant: rtc.RemoteParticipant):
-                    logger.info(f"Participant connected event received for: {participant.identity}")
-                    connected_event.set()
-                
-                # Check if participant is already present
-                if len(ctx.room.remote_participants) > 0:
-                    logger.info("Participant already present in room.")
-                    connected_event.set()
-                
-                try:
-                    await asyncio.wait_for(connected_event.wait(), timeout=45.0)
-                except asyncio.TimeoutError:
-                    logger.warning("Timeout waiting for participant to join.")
-                    return
-                
-                logger.info("Participant joined, speaking greeting.")
-                await asyncio.sleep(2.0) # Brief delay to let the user put the phone to their ear
-                
-                session.tts.update_options(voice="Anisha")
-                if custom_message:
-                    session.say(custom_message)
-                elif call_type == "payment_reminder":
-                    session.say(
-                        "Namaste! This is Dia calling from Bharat Finance Services. We are calling to remind you that your monthly loan EMI payment is due in three days. "
-                        "You can say 'stop the call' or hang up at any time if you'd like to end this call or opt out."
-                    )
-                elif call_type == "itr_deadline":
-                    session.say(
-                        "Namaste! This is Dia calling from the National Financial Literacy Council of India. We are calling to remind you that the deadline for filing your Income Tax Return is approaching on July thirty-first. "
-                        "You can say 'stop the call' or hang up at any time if you'd like to end this call or opt out."
-                    )
-                else: # default scheme_deadline
-                    session.say(
-                        "Namaste! This is Dia calling from the National Financial Literacy Council of India regarding the approaching deadline for the PM-Kisan scheme. "
-                        "You can say 'stop the call' or hang up at any time if you'd like to end this call or opt out."
-                    )
-                logger.info(f"Spoke outbound welcome greeting for {call_type} on entry")
-            else:
-                await asyncio.sleep(1.0)
-                session.tts.update_options(voice="Anisha")
-                session.say("नमस्ते! मैं दीया हूँ। मुझे अपनी फाइनेंशियल दोस्त समझिए। मैं सरकारी फाइनेंशियल स्कीम्स और सेफ बैंकिंग से जुड़े सवालों में आपकी मदद करने के लिए यहाँ हूँ। बताइए, आज मैं आपकी कैसे मदद कर सकती हूँ? क्या मैं आपका शुभ नाम जान सकती हूँ?")
-                logger.info("Spoke inbound welcome greeting to user on entry")
-        except Exception as err:
-            logger.error(f"Failed to speak welcome greeting: {err}")
-
-    asyncio.create_task(greet_user_on_entry())
+            update_call_end(
+                call_id=call_id,
+                duration_seconds=duration,
+                outcome=outcome,
+                language=lang,
+                failure_reason=failure_reason,
+                success_reason=success_reason
+            )
+        except Exception as e:
+            logger.error(f"Failed to update call end in db: {e}")
 
 
 if __name__ == "__main__":
