@@ -7,6 +7,7 @@ import {
   useLocalParticipant,
   useTracks,
   useVoiceAssistant,
+  useRemoteParticipants,
 } from '@livekit/components-react';
 import { cn } from '@/lib/shadcn/utils';
 import { AudioVisualizer } from './audio-visualizer';
@@ -94,6 +95,9 @@ export function TileLayout({
   audioVisualizerWaveLineWidth,
 }: TileLayoutProps) {
   const { videoTrack: agentVideoTrack, state: agentState } = useVoiceAssistant();
+  const remoteParticipants = useRemoteParticipants();
+  const agentParticipant = remoteParticipants[0];
+  const agentMetadata = agentParticipant?.metadata || 'Dia';
   const [screenShareTrack] = useTracks([Track.Source.ScreenShare]);
   const cameraTrack: TrackReference | undefined = useLocalTrackRef(Track.Source.Camera);
 
@@ -105,6 +109,55 @@ export function TileLayout({
   const isAvatar = agentVideoTrack !== undefined;
   const videoWidth = agentVideoTrack?.publication.dimensions?.width ?? 0;
   const videoHeight = agentVideoTrack?.publication.dimensions?.height ?? 0;
+
+  // Compute status badge details
+  const getBadgeDetails = () => {
+    const isConnecting = agentState === 'connecting' || agentState === 'initializing';
+    const isDisconnected = agentState === 'disconnected';
+
+    if (isConnecting) {
+      return {
+        statusText: 'Connecting to Dia...',
+        roleText: 'Setting up secure line',
+        theme: 'connecting',
+      };
+    }
+    if (isDisconnected) {
+      return {
+        statusText: 'Disconnected',
+        roleText: 'Session ended',
+        theme: 'disconnected',
+      };
+    }
+    if (agentMetadata === 'connecting_to_krishna') {
+      return {
+        statusText: 'Connecting to Krishna...',
+        roleText: 'Govt Scheme Specialist Handoff',
+        theme: 'connecting',
+      };
+    }
+    if (agentMetadata === 'connecting_to_dia') {
+      return {
+        statusText: 'Connecting to Dia...',
+        roleText: 'Financial Assistant Handoff',
+        theme: 'connecting',
+      };
+    }
+    if (agentMetadata === 'Krishna') {
+      return {
+        statusText: 'Krishna',
+        roleText: 'Govt Scheme Specialist',
+        theme: 'krishna',
+      };
+    }
+    return {
+      statusText: 'Dia',
+      roleText: 'Financial Assistant',
+      theme: 'dia',
+    };
+  };
+
+  const badge = getBadgeDetails();
 
   return (
     <div className="absolute inset-x-0 top-8 bottom-32 z-50 md:top-12 md:bottom-40">
@@ -119,97 +172,138 @@ export function TileLayout({
               chatOpen && !hasSecondTile && tileViewClassNames.agentChatOpenWithoutSecondTile,
             ])}
           >
-            <AnimatePresence mode="popLayout">
-              {!isAvatar && (
-                // Audio Agent
-                <motion.div
-                  key="agent"
-                  layoutId="agent"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{
-                    ...ANIMATION_TRANSITION,
-                    delay: animationDelay,
-                  }}
-                  className={cn('relative aspect-square h-[90px]')}
-                >
-                  <AudioVisualizer
-                    key="audio-visualizer"
-                    initial={{ scale: 1 }}
-                    animate={{ scale: chatOpen ? 0.2 : 1 }}
+            <div className="flex flex-col items-center justify-center gap-5">
+              <AnimatePresence mode="popLayout">
+                {!isAvatar && (
+                  // Audio Agent
+                  <motion.div
+                    key="agent"
+                    layoutId="agent"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
                     transition={{
                       ...ANIMATION_TRANSITION,
                       delay: animationDelay,
                     }}
-                    audioVisualizerType={audioVisualizerType}
-                    audioVisualizerColor={audioVisualizerColor}
-                    audioVisualizerColorShift={audioVisualizerColorShift}
-                    audioVisualizerBarCount={audioVisualizerBarCount}
-                    audioVisualizerRadialBarCount={audioVisualizerRadialBarCount}
-                    audioVisualizerRadialRadius={audioVisualizerRadialRadius}
-                    audioVisualizerGridRowCount={audioVisualizerGridRowCount}
-                    audioVisualizerGridColumnCount={audioVisualizerGridColumnCount}
-                    audioVisualizerWaveLineWidth={audioVisualizerWaveLineWidth}
-                    isChatOpen={chatOpen}
-                    className={cn(
-                      'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2',
-                      'bg-background rounded-[50px] border border-transparent transition-[border,drop-shadow]',
-                      chatOpen && 'border-input shadow-2xl/10 delay-200'
-                    )}
-                    style={{ color: audioVisualizerColor }}
-                  />
-                  <AgentFace
-                    state={agentState as any}
-                    className={cn(
-                      'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 transition-all duration-300',
-                      chatOpen ? 'scale-[0.55]' : 'scale-100'
-                    )}
-                  />
-                </motion.div>
-              )}
+                    className={cn('relative aspect-square h-[90px]')}
+                  >
+                    <AudioVisualizer
+                      key="audio-visualizer"
+                      initial={{ scale: 1 }}
+                      animate={{ scale: chatOpen ? 0.2 : 1 }}
+                      transition={{
+                        ...ANIMATION_TRANSITION,
+                        delay: animationDelay,
+                      }}
+                      audioVisualizerType={audioVisualizerType}
+                      audioVisualizerColor={audioVisualizerColor}
+                      audioVisualizerColorShift={audioVisualizerColorShift}
+                      audioVisualizerBarCount={audioVisualizerBarCount}
+                      audioVisualizerRadialBarCount={audioVisualizerRadialBarCount}
+                      audioVisualizerRadialRadius={audioVisualizerRadialRadius}
+                      audioVisualizerGridRowCount={audioVisualizerGridRowCount}
+                      audioVisualizerGridColumnCount={audioVisualizerGridColumnCount}
+                      audioVisualizerWaveLineWidth={audioVisualizerWaveLineWidth}
+                      isChatOpen={chatOpen}
+                      className={cn(
+                        'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2',
+                        'bg-background rounded-[50px] border border-transparent transition-[border,drop-shadow]',
+                        chatOpen && 'border-input shadow-2xl/10 delay-200'
+                      )}
+                      style={{ color: audioVisualizerColor }}
+                    />
+                    <AgentFace
+                      state={agentState as any}
+                      className={cn(
+                        'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 transition-all duration-300',
+                        chatOpen ? 'scale-[0.55]' : 'scale-100'
+                      )}
+                    />
+                  </motion.div>
+                )}
 
-              {isAvatar && (
-                // Avatar Agent
+                {isAvatar && (
+                  // Avatar Agent
+                  <motion.div
+                    key="avatar"
+                    layoutId="avatar"
+                    initial={{
+                      scale: 1,
+                      opacity: 1,
+                      maskImage:
+                        'radial-gradient(circle, rgba(0, 0, 0, 1) 0, rgba(0, 0, 0, 1) 20px, transparent 20px)',
+                      filter: 'blur(20px)',
+                    }}
+                    animate={{
+                      maskImage:
+                        'radial-gradient(circle, rgba(0, 0, 0, 1) 0, rgba(0, 0, 0, 1) 500px, transparent 500px)',
+                      filter: 'blur(0px)',
+                      borderRadius: chatOpen ? 6 : 12,
+                    }}
+                    transition={{
+                      ...ANIMATION_TRANSITION,
+                      delay: animationDelay,
+                      maskImage: {
+                        duration: 1,
+                      },
+                      filter: {
+                        duration: 1,
+                      },
+                    }}
+                    className={cn(
+                      'overflow-hidden bg-black drop-shadow-xl/80',
+                      chatOpen ? 'h-[90px]' : 'h-auto w-full'
+                    )}
+                  >
+                    <VideoTrack
+                      width={videoWidth}
+                      height={videoHeight}
+                      trackRef={agentVideoTrack}
+                      className={cn(chatOpen && 'size-[90px] object-cover')}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Status & Identity Badge */}
+              <AnimatePresence mode="wait">
                 <motion.div
-                  key="avatar"
-                  layoutId="avatar"
-                  initial={{
-                    scale: 1,
-                    opacity: 1,
-                    maskImage:
-                      'radial-gradient(circle, rgba(0, 0, 0, 1) 0, rgba(0, 0, 0, 1) 20px, transparent 20px)',
-                    filter: 'blur(20px)',
-                  }}
-                  animate={{
-                    maskImage:
-                      'radial-gradient(circle, rgba(0, 0, 0, 1) 0, rgba(0, 0, 0, 1) 500px, transparent 500px)',
-                    filter: 'blur(0px)',
-                    borderRadius: chatOpen ? 6 : 12,
-                  }}
-                  transition={{
-                    ...ANIMATION_TRANSITION,
-                    delay: animationDelay,
-                    maskImage: {
-                      duration: 1,
-                    },
-                    filter: {
-                      duration: 1,
-                    },
-                  }}
+                  key={badge.theme + badge.statusText}
+                  initial={{ opacity: 0, y: 12, filter: 'blur(4px)' }}
+                  animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                  exit={{ opacity: 0, y: -12, filter: 'blur(4px)' }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
                   className={cn(
-                    'overflow-hidden bg-black drop-shadow-xl/80',
-                    chatOpen ? 'h-[90px]' : 'h-auto w-full'
+                    "flex flex-col items-center justify-center px-4 py-2 rounded-2xl border backdrop-blur-md transition-all duration-300 shadow-md w-60",
+                    badge.theme === 'dia' && "bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400 shadow-indigo-500/5",
+                    badge.theme === 'krishna' && "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400 shadow-amber-500/5",
+                    badge.theme === 'connecting' && "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400 shadow-emerald-500/5",
+                    badge.theme === 'disconnected' && "bg-slate-500/10 border-slate-500/20 text-slate-500 dark:text-slate-400"
                   )}
                 >
-                  <VideoTrack
-                    width={videoWidth}
-                    height={videoHeight}
-                    trackRef={agentVideoTrack}
-                    className={cn(chatOpen && 'size-[90px] object-cover')}
-                  />
+                  <div className="flex items-center gap-2">
+                    {badge.theme === 'connecting' ? (
+                      <div className="size-3 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                    ) : badge.theme === 'disconnected' ? (
+                      <div className="size-2.5 rounded-full bg-slate-400" />
+                    ) : (
+                      <div className="relative flex size-2.5 items-center justify-center">
+                        <span className={cn(
+                          "absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping",
+                          badge.theme === 'dia' ? "bg-indigo-400" : "bg-amber-400"
+                        )} />
+                        <span className={cn(
+                          "relative inline-flex rounded-full size-2.5",
+                          badge.theme === 'dia' ? "bg-indigo-500" : "bg-amber-500"
+                        )} />
+                      </div>
+                    )}
+                    <span className="text-sm font-extrabold tracking-wide">{badge.statusText}</span>
+                  </div>
+                  <span className="text-[10px] font-bold opacity-80 uppercase tracking-widest mt-0.5">{badge.roleText}</span>
                 </motion.div>
-              )}
-            </AnimatePresence>
+              </AnimatePresence>
+            </div>
           </div>
 
           <div

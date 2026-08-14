@@ -50,10 +50,26 @@ def init_db():
             channel TEXT,
             outcome TEXT,
             failure_reason TEXT,
-            success_reason TEXT
+            success_reason TEXT,
+            active_agent TEXT DEFAULT 'Dia',
+            handoff_occurred INTEGER DEFAULT 0,
+            handoff_count INTEGER DEFAULT 0,
+            specialist_agent TEXT
         )
     """)
     
+    # Ensure new columns exist in case calls table already exists
+    cursor.execute("PRAGMA table_info(calls)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "active_agent" not in columns:
+        cursor.execute("ALTER TABLE calls ADD COLUMN active_agent TEXT DEFAULT 'Dia'")
+    if "handoff_occurred" not in columns:
+        cursor.execute("ALTER TABLE calls ADD COLUMN handoff_occurred INTEGER DEFAULT 0")
+    if "handoff_count" not in columns:
+        cursor.execute("ALTER TABLE calls ADD COLUMN handoff_count INTEGER DEFAULT 0")
+    if "specialist_agent" not in columns:
+        cursor.execute("ALTER TABLE calls ADD COLUMN specialist_agent TEXT")
+        
     conn.commit()
     conn.close()
 
@@ -137,9 +153,24 @@ def add_call_start(call_id, language="English", channel="browser"):
     cursor = conn.cursor()
     started_at = datetime.now().isoformat()
     cursor.execute("""
-        INSERT INTO calls (call_id, started_at, language, channel, outcome)
-        VALUES (?, ?, ?, ?, 'IN_PROGRESS')
+        INSERT INTO calls (call_id, started_at, language, channel, outcome, active_agent, handoff_occurred, handoff_count)
+        VALUES (?, ?, ?, ?, 'IN_PROGRESS', 'Dia', 0, 0)
     """, (call_id, started_at, language, channel))
+    conn.commit()
+    conn.close()
+
+def record_handoff(call_id, to_agent, specialist_agent=None):
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE calls
+        SET handoff_occurred = 1,
+            handoff_count = handoff_count + 1,
+            active_agent = ?,
+            specialist_agent = COALESCE(?, specialist_agent)
+        WHERE call_id = ?
+    """, (to_agent, specialist_agent, call_id))
     conn.commit()
     conn.close()
 
@@ -166,11 +197,22 @@ def get_analytics():
     successful_calls = cursor.fetchone()[0]
     cursor.execute("SELECT COUNT(*) FROM calls WHERE outcome = 'FAILED'")
     failed_calls = cursor.fetchone()[0]
+    
+    # Handoff metrics
+    cursor.execute("SELECT SUM(handoff_count) FROM calls")
+    res_handoffs = cursor.fetchone()[0]
+    total_handoffs = res_handoffs if res_handoffs is not None else 0
+    
+    cursor.execute("SELECT COUNT(*) FROM calls WHERE specialist_agent IS NOT NULL")
+    specialist_handoffs = cursor.fetchone()[0]
+    
     conn.close()
     return {
         "total_calls": total_calls,
         "successful_calls": successful_calls,
-        "failed_calls": failed_calls
+        "failed_calls": failed_calls,
+        "total_handoffs": total_handoffs,
+        "specialist_handoffs": specialist_handoffs
     }
 
 def get_calls_history():
@@ -178,7 +220,7 @@ def get_calls_history():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT call_id, started_at, duration_seconds, language, channel, outcome 
+        SELECT call_id, started_at, duration_seconds, language, channel, outcome, active_agent, handoff_occurred, specialist_agent
         FROM calls 
         WHERE outcome IN ('SUCCESS', 'FAILED')
         ORDER BY started_at DESC
@@ -193,7 +235,10 @@ def get_calls_history():
             "duration_seconds": r[2],
             "language": r[3],
             "channel": r[4],
-            "outcome": r[5]
+            "outcome": r[5],
+            "active_agent": r[6],
+            "handoff_occurred": r[7],
+            "specialist_agent": r[8]
         })
     return history
 

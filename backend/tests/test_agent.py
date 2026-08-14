@@ -6,7 +6,7 @@ from agent import Assistant
 
 
 def _llm() -> llm.LLM:
-    return google.LLM(model="gemini-3.5-flash")
+    return google.LLM(model="gemini-3.5-flash-lite")
 
 
 @pytest.mark.asyncio

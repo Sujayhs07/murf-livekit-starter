@@ -32,6 +32,9 @@ export async function POST(req: Request) {
 
     const url = new URL(req.url);
     const activeTab = url.searchParams.get('activeTab') || 'voice';
+    const notifications = url.searchParams.get('notifications') || 'true';
+    const darkMode = url.searchParams.get('darkMode') || 'false';
+    const language = url.searchParams.get('language') || 'en';
 
     // Parse room config from request body (if provided).
     const body = await req.json().catch(() => ({}));
@@ -58,7 +61,7 @@ export async function POST(req: Request) {
       { 
         identity: participantIdentity, 
         name: participantName,
-        metadata: JSON.stringify({ activeTab })
+        metadata: JSON.stringify({ activeTab, notifications, darkMode, language })
       },
       roomName,
       roomConfig

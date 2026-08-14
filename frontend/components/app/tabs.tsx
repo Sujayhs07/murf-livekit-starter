@@ -15,6 +15,7 @@ import { useAgentErrors } from '@/hooks/useAgentErrors';
 import { useDebugMode } from '@/hooks/useDebug';
 import { getSandboxTokenSource } from '@/lib/utils';
 import { AudioVisualizer } from '@/components/agents-ui/blocks/agent-session-view-01/components/audio-visualizer';
+import { translations } from '@/components/app/translations';
 
 const IN_DEVELOPMENT = process.env.NODE_ENV !== 'production';
 
@@ -28,7 +29,8 @@ function AppSetup() {
 const isClient = () => typeof window !== 'undefined';
 
 // Interactive & Database-backed Finance Dashboard component
-function FinanceDashboard() {
+function FinanceDashboard({ language }: { language: string }) {
+  const t = translations[language as keyof typeof translations] || translations.en;
   const [balance, setBalance] = useState(12345);
   const [amount, setAmount] = useState('');
   const [transactions, setTransactions] = useState<
@@ -114,14 +116,14 @@ function FinanceDashboard() {
   };
 
   return (
-    <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-slate-200 bg-white/85 p-6 text-slate-800 shadow-sm backdrop-blur-md transition-all hover:shadow-md">
-      <h2 className="mb-4 bg-gradient-to-r from-emerald-600 to-indigo-600 bg-clip-text text-2xl font-bold text-transparent">
-        Finance Dashboard
+    <div className="mx-auto mt-8 max-w-2xl rounded-2xl p-6 text-slate-800 dark:text-slate-100 card-3d">
+      <h2 className="mb-4 bg-gradient-to-r from-emerald-600 to-indigo-600 bg-clip-text text-2xl font-extrabold text-transparent">
+        {t.financeDashboard}
       </h2>
 
-      <div className="mb-6 rounded-xl border border-slate-100 bg-slate-50 p-4">
-        <p className="text-sm font-medium text-slate-500">Current Balance</p>
-        <p className="mt-1 text-3xl font-extrabold text-slate-900">
+      <div className="mb-6 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/50 p-4 shadow-inner">
+        <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{t.currentBalance}</p>
+        <p className="mt-1 text-3xl font-black text-slate-900 dark:text-white">
           ₹{balance.toLocaleString('en-IN')}
         </p>
       </div>
@@ -129,43 +131,43 @@ function FinanceDashboard() {
       <div className="mb-6 flex space-x-3">
         <input
           type="number"
-          placeholder="Amount (₹)"
+          placeholder={t.amountPlaceholder}
           value={amount}
           disabled={loading}
           onChange={(e) => setAmount(e.target.value)}
-          className="flex-1 rounded-xl border border-slate-200 bg-white p-3 font-medium text-slate-800 placeholder-slate-400 transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none"
+          className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 font-semibold text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none shadow-xs"
         />
         <button
           onClick={handleAdd}
           disabled={loading}
-          className="rounded-xl bg-emerald-600 px-6 py-3 font-bold text-white shadow-sm transition-all hover:bg-emerald-700 hover:shadow active:scale-95 disabled:opacity-55"
+          className="rounded-xl bg-emerald-600 px-6 py-3 font-bold text-white shadow-md shadow-emerald-600/10 transition-all hover:bg-emerald-700 hover:shadow-lg active:translate-y-0.5 active:scale-98 disabled:opacity-55"
         >
-          Add
+          {t.add}
         </button>
         <button
           onClick={handleWithdraw}
           disabled={loading}
-          className="rounded-xl bg-rose-600 px-6 py-3 font-bold text-white shadow-sm transition-all hover:bg-rose-700 hover:shadow active:scale-95 disabled:opacity-55"
+          className="rounded-xl bg-rose-600 px-6 py-3 font-bold text-white shadow-md shadow-rose-600/10 transition-all hover:bg-rose-700 hover:shadow-lg active:translate-y-0.5 active:scale-98 disabled:opacity-55"
         >
-          Withdraw
+          {t.withdraw}
         </button>
       </div>
 
       <div>
-        <h3 className="text-md mb-3 font-bold text-slate-700">Transaction History</h3>
+        <h3 className="text-md mb-3 font-bold text-slate-700 dark:text-slate-300">{t.transactionHistory}</h3>
         {transactions.length === 0 ? (
-          <p className="text-sm text-slate-400 italic">No transactions recorded yet.</p>
+          <p className="text-sm text-slate-400 dark:text-slate-500 italic">{t.noTransactions}</p>
         ) : (
           <div className="max-h-40 space-y-2 overflow-y-auto pr-2">
             {transactions.map((tx) => (
               <div
                 key={tx.id}
-                className="flex items-center justify-between rounded-lg border border-slate-100/80 bg-slate-50/50 p-2.5 text-sm"
+                className="flex items-center justify-between rounded-lg border border-slate-100/80 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/30 p-2.5 text-sm"
               >
-                <span className="font-semibold text-slate-500">{tx.time}</span>
+                <span className="font-semibold text-slate-500 dark:text-slate-400">{tx.time}</span>
                 <span
                   className={
-                    tx.type === 'add' ? 'font-bold text-emerald-600' : 'font-bold text-rose-600'
+                    tx.type === 'add' ? 'font-extrabold text-emerald-600 dark:text-emerald-400' : 'font-extrabold text-rose-600 dark:text-rose-400'
                   }
                 >
                   {tx.type === 'add' ? '+' : '-'} ₹{tx.amount.toLocaleString('en-IN')}
@@ -176,33 +178,33 @@ function FinanceDashboard() {
         )}
       </div>
 
-      <div className="mt-6 border-t border-slate-200/60 pt-6">
-        <h3 className="text-md mb-3 font-bold text-slate-700">Support Tickets & Escalations</h3>
+      <div className="mt-6 border-t border-slate-200/60 dark:border-slate-800/60 pt-6">
+        <h3 className="text-md mb-3 font-bold text-slate-700 dark:text-slate-300">{t.supportTickets}</h3>
         {escalations.length === 0 ? (
-          <p className="text-sm text-slate-400 italic">No active support requests.</p>
+          <p className="text-sm text-slate-400 dark:text-slate-500 italic">{t.noSupportRequests}</p>
         ) : (
           <div className="max-h-60 space-y-3 overflow-y-auto pr-2 animate-fadeIn">
             {escalations.map((esc) => (
               <div
                 key={esc.reference_id}
-                className="rounded-lg border border-slate-200/80 bg-slate-50/55 p-3 text-sm shadow-sm hover:border-emerald-200 transition-all"
+                className="rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/55 dark:bg-slate-900/40 p-3 text-sm shadow-sm hover:border-emerald-200 dark:hover:border-emerald-800/80 transition-all"
               >
                 <div className="flex items-center justify-between font-bold mb-1">
-                  <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">{esc.reference_id}</span>
-                  <span className={`px-2 py-0.5 rounded text-xs tracking-wider uppercase ${esc.urgency === 'EMERGENCY' ? 'bg-red-100 text-red-700 border border-red-200 font-extrabold animate-pulse' :
-                      esc.urgency === 'HIGH' ? 'bg-orange-100 text-orange-700 border border-orange-200' :
-                        esc.urgency === 'MEDIUM' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
-                          'bg-slate-100 text-slate-700 border border-slate-200'
+                  <span className="text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">{esc.reference_id}</span>
+                  <span className={`px-2 py-0.5 rounded text-xs tracking-wider uppercase font-bold ${esc.urgency === 'EMERGENCY' ? 'bg-red-100 text-red-700 border border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800/60 animate-pulse' :
+                      esc.urgency === 'HIGH' ? 'bg-orange-100 text-orange-700 border border-orange-200 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800/60' :
+                      esc.urgency === 'MEDIUM' ? 'bg-amber-100 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60' :
+                      'bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-350 dark:border-slate-700'
                     }`}>
-                    {esc.urgency} Urgency
+                    {esc.urgency} {t.urgency}
                   </span>
                 </div>
-                <div className="text-xs text-slate-500 mb-2 font-medium">{esc.timestamp} • Status: <span className="font-semibold text-slate-700">{esc.status}</span></div>
-                <div className="space-y-1 text-slate-700">
-                  <div><strong>Reason:</strong> {esc.reason.replace('_', ' ').toUpperCase()}</div>
-                  <div><strong>Language:</strong> {esc.language}</div>
-                  <div><strong>Follow-up:</strong> {esc.preferred_followup}</div>
-                  <div className="text-slate-600 mt-1 bg-white/70 p-2 rounded border border-slate-100 text-xs italic">{esc.summary}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mb-2 font-medium">{esc.timestamp} • Status: <span className="font-semibold text-slate-700 dark:text-slate-300">{esc.status}</span></div>
+                <div className="space-y-1 text-slate-750 dark:text-slate-200">
+                  <div><strong>{t.reason}:</strong> {esc.reason.replace('_', ' ').toUpperCase()}</div>
+                  <div><strong>{t.languageLabel}:</strong> {esc.language}</div>
+                  <div><strong>{t.followUp}:</strong> {esc.preferred_followup}</div>
+                  <div className="text-slate-600 dark:text-slate-300 mt-1 bg-white/70 dark:bg-slate-900/60 p-2 rounded border border-slate-100 dark:border-slate-800 text-xs italic">{esc.summary}</div>
                 </div>
               </div>
             ))}
@@ -213,7 +215,8 @@ function FinanceDashboard() {
   );
 }
 
-function AnalyticsDashboard() {
+function AnalyticsDashboard({ language }: { language: string }) {
+  const t = translations[language as keyof typeof translations] || translations.en;
   const { isConnected, start } = useSessionContext();
   const room = useRoomContext();
   const [connecting, setConnecting] = useState(false);
@@ -221,6 +224,8 @@ function AnalyticsDashboard() {
     total_calls: 0,
     successful_calls: 0,
     failed_calls: 0,
+    total_handoffs: 0,
+    specialist_handoffs: 0,
   });
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -281,20 +286,20 @@ function AnalyticsDashboard() {
   };
 
   return (
-    <div className="mx-auto mt-8 max-w-4xl rounded-2xl border border-slate-200 bg-white/85 p-6 text-slate-800 shadow-sm backdrop-blur-md transition-all hover:shadow-md">
+    <div className="mx-auto mt-8 max-w-4xl p-6 text-slate-800 dark:text-slate-100 card-3d">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="bg-gradient-to-r from-emerald-600 to-indigo-600 bg-clip-text text-2xl font-bold text-transparent">
-            FINORA AI — Call Analytics
+          <h2 className="bg-gradient-to-r from-emerald-600 to-indigo-600 bg-clip-text text-2xl font-extrabold text-transparent">
+            {t.analyticsTitle}
           </h2>
-          <p className="text-sm font-medium text-slate-500">
-            Monitor voice-agent performance and call outcomes.
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+            {t.analyticsSub}
           </p>
         </div>
         <div className="flex items-center gap-3">
           {isConnected ? (
-            <div className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-1.5 shadow-sm">
-              <div className="relative flex size-10 items-center justify-center overflow-hidden rounded-full bg-emerald-100/50">
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-100 dark:border-emerald-800/40 bg-emerald-50/50 dark:bg-emerald-950/30 px-3 py-1.5 shadow-sm">
+              <div className="relative flex size-10 items-center justify-center overflow-hidden rounded-full bg-emerald-100/50 dark:bg-emerald-900/30">
                 <AudioVisualizer
                   audioVisualizerType="wave"
                   audioVisualizerColor="#059669"
@@ -306,16 +311,16 @@ function AnalyticsDashboard() {
                 onClick={() => room.disconnect()}
                 className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-rose-700 active:scale-95"
               >
-                Disconnect
+                {t.disconnect}
               </button>
             </div>
           ) : (
             <button
               onClick={handleStartCall}
               disabled={connecting}
-              className="rounded-xl bg-gradient-to-r from-emerald-600 to-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:opacity-90 active:scale-95 disabled:opacity-50"
+              className="rounded-xl bg-gradient-to-r from-emerald-600 to-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:opacity-90 active:translate-y-0.5 active:scale-98 disabled:opacity-50"
             >
-              {connecting ? 'Connecting...' : 'Talk to Dia'}
+              {connecting ? t.connecting : t.talkToDia}
             </button>
           )}
           <button
@@ -324,67 +329,95 @@ function AnalyticsDashboard() {
               fetchAnalyticsData();
             }}
             disabled={loading}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 shadow-sm hover:bg-slate-50 active:scale-95 disabled:opacity-50"
+            className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-xs font-bold text-slate-600 dark:text-slate-300 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 active:translate-y-0.5 active:scale-98 disabled:opacity-55"
           >
-            {loading ? 'Refreshing...' : 'Refresh'}
+            {loading ? t.refreshing : t.refresh}
           </button>
         </div>
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Calls</p>
-          <p className="mt-2 text-3xl font-extrabold text-slate-900">{analytics.total_calls}</p>
+        <div className="rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/40 p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">{t.totalCalls}</p>
+          <p className="mt-2 text-3xl font-black text-slate-900 dark:text-white">{analytics.total_calls}</p>
         </div>
 
-        <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">Successful Calls</p>
-          <p className="mt-2 text-3xl font-extrabold text-emerald-700">{analytics.successful_calls}</p>
+        <div className="rounded-xl border border-emerald-100 dark:border-emerald-950 bg-emerald-50/50 dark:bg-emerald-950/20 p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">{t.successfulCalls}</p>
+          <p className="mt-2 text-3xl font-black text-emerald-700 dark:text-emerald-300">{analytics.successful_calls}</p>
         </div>
 
-        <div className="rounded-xl border border-rose-100 bg-rose-50/50 p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-rose-600">Failed Calls</p>
-          <p className="mt-2 text-3xl font-extrabold text-rose-700">{analytics.failed_calls}</p>
+        <div className="rounded-xl border border-rose-100 dark:border-rose-950 bg-rose-50/50 dark:bg-rose-950/20 p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">{t.failedCalls}</p>
+          <p className="mt-2 text-3xl font-black text-rose-700 dark:text-rose-300">{analytics.failed_calls}</p>
         </div>
 
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-4 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-indigo-600">Success Rate</p>
-          <p className="mt-2 text-3xl font-extrabold text-indigo-700">{successRate}%</p>
+        <div className="rounded-xl border border-indigo-100 dark:border-indigo-950 bg-indigo-50/50 dark:bg-indigo-950/20 p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">{t.successRate}</p>
+          <p className="mt-2 text-3xl font-black text-indigo-700 dark:text-indigo-300">{successRate}%</p>
+        </div>
+      </div>
+
+      <div className="mb-8 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/20 p-6 shadow-sm">
+        <h3 className="mb-4 text-sm font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">{t.agentHandoffs}</h3>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">{t.agentHandoffs}</p>
+            <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{analytics.total_handoffs || 0}</p>
+          </div>
+          <div className="rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50/40 dark:bg-indigo-950/30 p-4 shadow-xs">
+            <p className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">{t.specialistHandoffs}</p>
+            <p className="mt-2 text-2xl font-black text-indigo-700 dark:text-indigo-300">{analytics.specialist_handoffs || 0}</p>
+          </div>
+          <div className="rounded-xl border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/40 dark:bg-emerald-950/30 p-4 shadow-xs">
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">{t.handoffRate}</p>
+            <p className="mt-2 text-2xl font-black text-emerald-700 dark:text-emerald-300">
+              {analytics.total_calls > 0 ? Math.round(((analytics.specialist_handoffs || 0) / analytics.total_calls) * 100) : 0}%
+            </p>
+          </div>
         </div>
       </div>
 
       <div>
-        <h3 className="mb-4 text-lg font-bold text-slate-700">Recent Calls</h3>
+        <h3 className="mb-4 text-lg font-bold text-slate-700 dark:text-slate-300">{t.recentCalls}</h3>
         {history.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-200 p-8 text-center">
-            <p className="text-sm text-slate-400 italic">No completed calls recorded yet.</p>
+          <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 p-8 text-center">
+            <p className="text-sm text-slate-400 dark:text-slate-500 italic">{t.noCalls}</p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-100 bg-slate-50/30">
+          <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/10">
             <table className="w-full text-left text-sm border-collapse">
               <thead>
-                <tr className="border-b border-slate-200/60 bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  <th className="p-3.5">Call ID</th>
-                  <th className="p-3.5">Time</th>
-                  <th className="p-3.5">Duration</th>
-                  <th className="p-3.5">Language</th>
-                  <th className="p-3.5">Channel</th>
-                  <th className="p-3.5">Outcome</th>
+                <tr className="border-b border-slate-200/60 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <th className="p-3.5">{t.callId}</th>
+                  <th className="p-3.5">{t.time}</th>
+                  <th className="p-3.5">{t.duration}</th>
+                  <th className="p-3.5">{t.languageLabel}</th>
+                  <th className="p-3.5">{t.channel}</th>
+                  <th className="p-3.5">{t.agent}</th>
+                  <th className="p-3.5">{t.handoff}</th>
+                  <th className="p-3.5">{t.outcome}</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {history.map((call) => (
-                  <tr key={call.call_id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-3.5 font-semibold text-slate-700">{call.call_id}</td>
-                    <td className="p-3.5 text-slate-500">{formatTime(call.started_at)}</td>
-                    <td className="p-3.5 text-slate-600 font-medium">{formatDuration(call.duration_seconds)}</td>
-                    <td className="p-3.5 text-slate-600">{call.language}</td>
-                    <td className="p-3.5 text-slate-600 capitalize">{call.channel}</td>
+                  <tr key={call.call_id} className="hover:bg-slate-50/80 dark:hover:bg-slate-900/40 transition-colors">
+                    <td className="p-3.5 font-bold text-slate-700 dark:text-slate-300">{call.call_id}</td>
+                    <td className="p-3.5 text-slate-500 dark:text-slate-400">{formatTime(call.started_at)}</td>
+                    <td className="p-3.5 text-slate-600 dark:text-slate-300 font-semibold">{formatDuration(call.duration_seconds)}</td>
+                    <td className="p-3.5 text-slate-600 dark:text-slate-300">{call.language}</td>
+                    <td className="p-3.5 text-slate-600 dark:text-slate-300 capitalize">{call.channel}</td>
+                    <td className="p-3.5 text-slate-600 dark:text-slate-300 font-semibold">
+                      {call.handoff_occurred ? 'Dia → Government Scheme Specialist' : 'Dia'}
+                    </td>
+                    <td className="p-3.5 text-slate-600 dark:text-slate-300">
+                      {call.handoff_occurred ? t.yes : t.no}
+                    </td>
                     <td className="p-3.5">
                       <span
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold border ${call.outcome === 'SUCCESS'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : 'bg-rose-50 text-rose-700 border-rose-200'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/80'
+                            : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/80'
                           }`}
                       >
                         {call.outcome}
@@ -402,28 +435,22 @@ function AnalyticsDashboard() {
 }
 
 // Workable Settings Dashboard component (keeps localStorage for device/browser-specific state)
-function SettingsDashboard() {
-  const [notifications, setNotifications] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
-  const [language, setLanguage] = useState('en');
-
-  useEffect(() => {
-    if (isClient()) {
-      const savedNotif = localStorage.getItem('settings_notifications');
-      const savedDark = localStorage.getItem('settings_dark');
-      const savedLang = localStorage.getItem('settings_lang');
-
-      if (savedNotif !== null) setNotifications(savedNotif === 'true');
-      if (savedDark !== null) {
-        const isDark = savedDark === 'true';
-        setDarkMode(isDark);
-        // Sync body class
-        if (isDark) document.documentElement.classList.add('dark');
-        else document.documentElement.classList.remove('dark');
-      }
-      if (savedLang !== null) setLanguage(savedLang);
-    }
-  }, []);
+function SettingsDashboard({
+  notifications,
+  setNotifications,
+  darkMode,
+  setDarkMode,
+  language,
+  setLanguage,
+}: {
+  notifications: boolean;
+  setNotifications: React.Dispatch<React.SetStateAction<boolean>>;
+  darkMode: boolean;
+  setDarkMode: React.Dispatch<React.SetStateAction<boolean>>;
+  language: string;
+  setLanguage: React.Dispatch<React.SetStateAction<string>>;
+}) {
+  const t = translations[language as keyof typeof translations] || translations.en;
 
   const handleNotificationsChange = () => {
     const nextVal = !notifications;
@@ -449,14 +476,14 @@ function SettingsDashboard() {
   };
 
   return (
-    <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-slate-200 bg-white/85 p-6 text-slate-800 shadow-sm backdrop-blur-md transition-all hover:shadow-md">
-      <h2 className="mb-6 bg-gradient-to-r from-emerald-600 to-indigo-600 bg-clip-text text-2xl font-bold text-transparent">
-        Settings
+    <div className="mx-auto mt-8 max-w-2xl p-6 text-slate-800 dark:text-slate-100 card-3d">
+      <h2 className="mb-6 bg-gradient-to-r from-emerald-600 to-indigo-600 bg-clip-text text-2xl font-extrabold text-transparent">
+        {t.settings}
       </h2>
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
-          <span className="font-semibold text-slate-700">Enable notifications</span>
+        <div className="flex items-center justify-between rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/40 p-3">
+          <span className="font-semibold text-slate-700 dark:text-slate-200">{t.enableNotifications}</span>
           <input
             type="checkbox"
             checked={notifications}
@@ -465,8 +492,8 @@ function SettingsDashboard() {
           />
         </div>
 
-        <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
-          <span className="font-semibold text-slate-700">Dark mode</span>
+        <div className="flex items-center justify-between rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/40 p-3">
+          <span className="font-semibold text-slate-700 dark:text-slate-200">{t.darkMode}</span>
           <input
             type="checkbox"
             checked={darkMode}
@@ -475,14 +502,16 @@ function SettingsDashboard() {
           />
         </div>
 
-        <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
-          <span className="font-semibold text-slate-700">Language</span>
+        <div className="flex items-center justify-between rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/40 p-3">
+          <span className="font-semibold text-slate-700 dark:text-slate-200">{t.languageSelect}</span>
           <select
             value={language}
             onChange={handleLanguageChange}
-            className="rounded-lg border border-slate-200 bg-white p-2 font-medium text-slate-800 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none"
+            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 font-medium text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none"
           >
             <option value="en">English</option>
+            <option value="hi">Hindi</option>
+            <option value="kn">Kannada</option>
           </select>
         </div>
       </div>
@@ -491,7 +520,8 @@ function SettingsDashboard() {
 }
 
 // Help Dashboard component
-function HelpDashboard() {
+function HelpDashboard({ language }: { language: string }) {
+  const t = translations[language as keyof typeof translations] || translations.en;
   const { isConnected, start } = useSessionContext();
   const room = useRoomContext();
   const [connecting, setConnecting] = useState(false);
@@ -508,62 +538,62 @@ function HelpDashboard() {
   };
 
   return (
-    <div className="mx-auto mt-8 max-w-2xl rounded-2xl border border-slate-200 bg-white/85 p-8 text-slate-800 shadow-sm backdrop-blur-md">
+    <div className="mx-auto mt-8 max-w-2xl p-8 text-slate-800 dark:text-slate-100 card-3d">
       <div className="text-center mb-8">
         <h2 className="mb-2 bg-gradient-to-r from-emerald-600 to-indigo-600 bg-clip-text text-2xl font-extrabold text-transparent">
-          Finora AI — Help & Guide
+          {t.helpTitle}
         </h2>
-        <p className="text-sm font-medium text-slate-500">
-          Learn how to interact with your AI voice-agent Dia.
+        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+          {t.helpSub}
         </p>
       </div>
 
       <div className="space-y-6">
-        <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
-          <h3 className="font-bold text-slate-800 flex items-center gap-2">
-            🎙️ Meet Dia — Your AI Voice Agent
+        <div className="rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/30 p-4">
+          <h3 className="font-bold text-slate-850 dark:text-slate-100 flex items-center gap-2">
+            {t.diaHeading}
           </h3>
-          <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-            Dia is a multilingual financial assistant speaking both **English** and **Hindi**. She supports browser-based audio conversations to guide you through your financial queries.
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            {t.diaDesc}
           </p>
         </div>
 
-        <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
-          <h3 className="font-bold text-slate-800 flex items-center gap-2">
-            💡 Supported Tasks & Financial Services
+        <div className="rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/30 p-4">
+          <h3 className="font-bold text-slate-855 dark:text-slate-100 flex items-center gap-2">
+            {t.tasksHeading}
           </h3>
-          <ul className="mt-2 space-y-1.5 text-sm text-slate-600 list-disc pl-5">
-            <li>Check eligibility and documents needed for government schemes (PMJDY, PMSBY, APY, etc.).</li>
-            <li>Look up live exchange rates and cryptocurrency quotes (Bitcoin, Ethereum).</li>
-            <li>Calculate monthly EMIs or compound interest savings with decision advice.</li>
-            <li>Inquire about secure banking guidelines or check stock market quotes.</li>
+          <ul className="mt-2 space-y-1.5 text-sm text-slate-600 dark:text-slate-350 list-disc pl-5">
+            <li>{t.task1}</li>
+            <li>{t.task2}</li>
+            <li>{t.task3}</li>
+            <li>{t.task4}</li>
           </ul>
         </div>
 
-        <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
-          <h3 className="font-bold text-slate-800 flex items-center gap-2">
-            🔒 Privacy & Safety
+        <div className="rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/30 p-4">
+          <h3 className="font-bold text-slate-850 dark:text-slate-100 flex items-center gap-2">
+            {t.privacyHeading}
           </h3>
-          <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-            Finora AI does not store sensitive personal information such as passwords, CVVs, PINs, OTPs, or full bank account/card numbers. All logs are securely anonymized.
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            {t.privacyDesc}
           </p>
         </div>
 
-        <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
-          <h3 className="font-bold text-slate-800 flex items-center gap-2">
-            🚨 Human Escalation
+        <div className="rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/30 p-4">
+          <h3 className="font-bold text-slate-850 dark:text-slate-100 flex items-center gap-2">
+            {t.escalationHeading}
           </h3>
-          <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-            If your query requires human review, Dia will ask for your permission and raise a ticket. You will receive a unique reference ID (e.g., `FIN-2026-XXXX`) to track your support status.
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+            {t.escalationDesc}
           </p>
         </div>
       </div>
 
-      <div className="mt-8 flex flex-col items-center justify-center gap-4 border-t border-slate-100 pt-6">
+      <div className="mt-8 flex flex-col items-center justify-center gap-4 border-t border-slate-100 dark:border-slate-800 pt-6">
         {isConnected ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50/20 p-6 shadow-sm w-full max-w-sm">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 animate-pulse">Dia is Connected & Listening</span>
-            <div className="relative flex size-24 items-center justify-center overflow-hidden rounded-full bg-emerald-100/30">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/20 dark:bg-emerald-950/20 p-6 shadow-sm w-full max-w-sm animate-float">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 animate-pulse">{t.listening}</span>
+            <div className="relative flex size-24 items-center justify-center overflow-hidden rounded-full bg-emerald-100/30 dark:bg-emerald-900/20 animate-pulse-glow">
               <AudioVisualizer
                 audioVisualizerType="aura"
                 audioVisualizerColor="#019666ff"
@@ -573,18 +603,18 @@ function HelpDashboard() {
             </div>
             <button
               onClick={() => room.disconnect()}
-              className="w-full rounded-xl bg-rose-600 py-3 font-bold text-white shadow-sm hover:bg-rose-700 active:scale-95"
+              className="w-full rounded-xl bg-rose-600 py-3 font-bold text-white shadow-md hover:bg-rose-700 active:scale-95 transition-all"
             >
-              End Conversation
+              {t.endConversation}
             </button>
           </div>
         ) : (
           <button
             onClick={handleStartCall}
             disabled={connecting}
-            className="rounded-xl bg-gradient-to-r from-emerald-600 to-indigo-600 px-8 py-3.5 font-extrabold text-white shadow-md hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+            className="rounded-xl bg-gradient-to-r from-emerald-600 to-indigo-600 px-8 py-3.5 font-extrabold text-white shadow-md hover:opacity-90 active:translate-y-0.5 active:scale-98 transition-all disabled:opacity-50"
           >
-            {connecting ? 'Connecting to Dia...' : 'Start Conversation with Dia'}
+            {connecting ? t.connecting : t.startConversation}
           </button>
         )}
       </div>
@@ -602,7 +632,13 @@ function TabsContent({
   handleTabChange,
   originTab,
   setOriginTab,
-  setActiveTab
+  setActiveTab,
+  notifications,
+  setNotifications,
+  darkMode,
+  setDarkMode,
+  language,
+  setLanguage,
 }: {
   appConfig: AppConfig;
   activeTab: 'voice' | 'finance' | 'analytics' | 'settings' | 'help';
@@ -610,14 +646,21 @@ function TabsContent({
   originTab: string;
   setOriginTab: React.Dispatch<React.SetStateAction<string>>;
   setActiveTab: React.Dispatch<React.SetStateAction<'voice' | 'finance' | 'analytics' | 'settings' | 'help'>>;
+  notifications: boolean;
+  setNotifications: React.Dispatch<React.SetStateAction<boolean>>;
+  darkMode: boolean;
+  setDarkMode: React.Dispatch<React.SetStateAction<boolean>>;
+  language: string;
+  setLanguage: React.Dispatch<React.SetStateAction<string>>;
 }) {
+  const t = translations[language as keyof typeof translations] || translations.en;
   const getTabClass = (tab: typeof activeTab) => {
     const base =
-      'px-5 py-2.5 rounded-full font-bold text-sm tracking-wide transition-all duration-300 active:scale-95 shadow-sm border';
+      'px-5 py-2.5 rounded-full font-bold text-sm tracking-wide transition-all duration-300 active:translate-y-0.5 active:shadow-inner border';
     if (activeTab === tab) {
-      return `${base} bg-gradient-to-r from-emerald-600 to-indigo-600 text-white border-transparent shadow-emerald-500/10`;
+      return `${base} bg-gradient-to-r from-emerald-600 to-indigo-600 text-white border-transparent shadow-lg shadow-emerald-500/25`;
     }
-    return `${base} bg-white hover:bg-slate-50 text-slate-600 border-slate-200/80 hover:text-slate-900`;
+    return `${base} bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-650 dark:text-slate-200 border-slate-200/80 dark:border-slate-800 hover:text-slate-900 dark:hover:text-white shadow-sm`;
   };
 
   return (
@@ -625,29 +668,38 @@ function TabsContent({
       {/* Tab selectors */}
       <div className="mx-auto mb-6 flex max-w-4xl flex-wrap justify-center gap-3">
         <button className={getTabClass('voice')} onClick={() => handleTabChange('voice')}>
-          Voice Assistant
+          {t.voiceAssistant}
         </button>
         <button className={getTabClass('finance')} onClick={() => handleTabChange('finance')}>
-          Finance Dashboard
+          {t.financeDashboard}
         </button>
         <button className={getTabClass('analytics')} onClick={() => handleTabChange('analytics')}>
-          Call Analytics
+          {t.callAnalytics}
         </button>
         <button className={getTabClass('settings')} onClick={() => handleTabChange('settings')}>
-          Settings
+          {t.settings}
         </button>
         <button className={getTabClass('help')} onClick={() => handleTabChange('help')}>
-          Help
+          {t.help}
         </button>
       </div>
 
       {/* Content area */}
       <div className="w-full flex-1">
         {activeTab === 'voice' && <App appConfig={appConfig} />}
-        {activeTab === 'finance' && <FinanceDashboard />}
-        {activeTab === 'analytics' && <AnalyticsDashboard />}
-        {activeTab === 'settings' && <SettingsDashboard />}
-        {activeTab === 'help' && <HelpDashboard />}
+        {activeTab === 'finance' && <FinanceDashboard language={language} />}
+        {activeTab === 'analytics' && <AnalyticsDashboard language={language} />}
+        {activeTab === 'settings' && (
+          <SettingsDashboard
+            notifications={notifications}
+            setNotifications={setNotifications}
+            darkMode={darkMode}
+            setDarkMode={setDarkMode}
+            language={language}
+            setLanguage={setLanguage}
+          />
+        )}
+        {activeTab === 'help' && <HelpDashboard language={language} />}
       </div>
     </div>
   );
@@ -657,14 +709,39 @@ export default function Tabs({ appConfig }: TabsProps) {
   const [activeTab, setActiveTab] = useState<'voice' | 'finance' | 'analytics' | 'settings' | 'help'>('voice');
   const [originTab, setOriginTab] = useState<string>('voice');
 
+  // Lifted settings states
+  const [notifications, setNotifications] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+  const [language, setLanguage] = useState('en');
+
+  useEffect(() => {
+    if (isClient()) {
+      const savedNotif = localStorage.getItem('settings_notifications');
+      const savedDark = localStorage.getItem('settings_dark');
+      const savedLang = localStorage.getItem('settings_lang');
+
+      if (savedNotif !== null) setNotifications(savedNotif === 'true');
+      if (savedDark !== null) {
+        const isDark = savedDark === 'true';
+        setDarkMode(isDark);
+        // Sync body class
+        if (isDark) document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+      }
+      if (savedLang !== null) setLanguage(savedLang);
+    }
+  }, []);
+
   const handleTabChange = (tab: typeof activeTab) => {
     setActiveTab(tab);
     setOriginTab(tab);
   };
 
   const tokenSource = useMemo(() => {
-    return TokenSource.endpoint(`/api/token?activeTab=${originTab}`);
-  }, [originTab]);
+    return TokenSource.endpoint(
+      `/api/token?activeTab=${originTab}&notifications=${notifications}&darkMode=${darkMode}&language=${language}`
+    );
+  }, [originTab, notifications, darkMode, language]);
 
   const session = useSession(
     tokenSource,
@@ -681,6 +758,12 @@ export default function Tabs({ appConfig }: TabsProps) {
         originTab={originTab}
         setOriginTab={setOriginTab}
         setActiveTab={setActiveTab}
+        notifications={notifications}
+        setNotifications={setNotifications}
+        darkMode={darkMode}
+        setDarkMode={setDarkMode}
+        language={language}
+        setLanguage={setLanguage}
       />
       <StartAudioButton label="Start Audio" />
       <Toaster
