@@ -64,6 +64,13 @@ except ImportError:
     from src.tools import AssistantTools
 
 
+def get_voice_for_agent(agent_name: str, language: str) -> str:
+    # Under Falcon-2, en-IN-anisha and en-IN-samar natively support both English and Hindi.
+    if "Specialist" in agent_name or "krishna" in agent_name.lower():
+        return "en-IN-samar"
+    return "en-IN-anisha"
+
+
 class Assistant(Agent, AssistantTools):
     def __init__(
         self, room: rtc.Room | None = None, session: AgentSession | None = None
@@ -77,17 +84,18 @@ class Assistant(Agent, AssistantTools):
         self.success_reason = None
         self.failure_reason = "USER_HANGUP"
         self.escalation_prefix = "FIN"
-        self.voice = "Anisha"
+        self.voice = "en-IN-anisha"
 
     async def on_enter(self) -> None:
         logger.info("Assistant (Dia) entered/resumed session.")
         if self.session:
-            # Restore Dia's voice to Anisha
+            # Restore Dia's voice
+            voice_id = get_voice_for_agent(self.__class__.__name__, self.current_language)
             try:
-                self.session.tts.update_options(voice="Anisha")
-                logger.info("Dia: voice restored to Anisha.")
+                self.session.tts.update_options(voice=voice_id)
+                logger.info(f"Dia: voice restored to {voice_id}.")
             except Exception as e:
-                logger.error(f"Dia: failed to update TTS voice to Anisha: {e}")
+                logger.error(f"Dia: failed to update TTS voice to {voice_id}: {e}")
             if self.room and self.room.local_participant:
                 try:
                     await self.room.local_participant.set_metadata("Dia")
@@ -192,7 +200,7 @@ async def my_agent(ctx: JobContext):
         # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
         # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
         tts=murf.TTS(
-            voice="Anisha",
+            voice="en-IN-anisha",
             style="Conversation",
             tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
             text_pacing=True,
@@ -261,15 +269,16 @@ async def my_agent(ctx: JobContext):
                     pass
 
         active_agent = session.current_agent
-        voice_to_set = getattr(active_agent, "voice", "Anisha")
 
         if user_lang == "hi":
             logger.info("Using language from settings: Hindi.")
             active_agent.current_language = "Hindi"
+            voice_to_set = get_voice_for_agent(active_agent.__class__.__name__, "Hindi")
             _set_tts_voice(voice_to_set)
         elif user_lang == "en":
             logger.info("Using language from settings: English.")
             active_agent.current_language = "English"
+            voice_to_set = get_voice_for_agent(active_agent.__class__.__name__, "English")
             _set_tts_voice(voice_to_set)
         else:
             # Fallback to automatic language detection
@@ -338,12 +347,14 @@ async def my_agent(ctx: JobContext):
                     f"Detected Hindi/Hinglish speech: '{ev.transcript}'. Setting language to Hindi."
                 )
                 active_agent.current_language = "Hindi"
+                voice_to_set = get_voice_for_agent(active_agent.__class__.__name__, "Hindi")
                 _set_tts_voice(voice_to_set)
             else:
                 logger.info(
                     f"Detected English speech: '{ev.transcript}'. Setting language to English."
                 )
                 active_agent.current_language = "English"
+                voice_to_set = get_voice_for_agent(active_agent.__class__.__name__, "English")
                 _set_tts_voice(voice_to_set)
 
     # To use a realtime model instead of a voice pipeline, use the following session setup instead.
@@ -439,7 +450,8 @@ async def my_agent(ctx: JobContext):
                         2.0
                     )  # Brief delay to let the user put the phone to their ear
 
-                    session.tts.update_options(voice="Anisha")
+                    voice_id = get_voice_for_agent(assistant.__class__.__name__, assistant.current_language)
+                    session.tts.update_options(voice=voice_id)
                     if custom_message:
                         session.say(custom_message)
                     elif call_type == "payment_reminder":
@@ -462,7 +474,6 @@ async def my_agent(ctx: JobContext):
                     )
                 else:
                     await asyncio.sleep(1.0)
-                    session.tts.update_options(voice="Anisha")
 
                     active_tab = "voice"
                     user_lang = "en"
@@ -485,6 +496,9 @@ async def my_agent(ctx: JobContext):
                         assistant.current_language = "Kannada"
                     else:
                         assistant.current_language = "English"
+
+                    voice_id = get_voice_for_agent(assistant.__class__.__name__, assistant.current_language)
+                    session.tts.update_options(voice=voice_id)
 
                     logger.info(
                         f"Customized greeting based on active tab: {active_tab}, language: {user_lang}"

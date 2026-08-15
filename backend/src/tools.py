@@ -211,16 +211,28 @@ class AssistantTools:
                 self.current_language = "Hindi"
                 if self.agent_session:
                     try:
-                        self.agent_session.tts.update_options(voice="Anisha")
-                        logger.info("Restored database language preference: Anisha")
+                        from agent import get_voice_for_agent
+                    except ImportError:
+                        # pyrefly: ignore [missing-import]
+                        from src.agent import get_voice_for_agent
+                    try:
+                        voice_id = get_voice_for_agent(self.__class__.__name__, "Hindi")
+                        self.agent_session.tts.update_options(voice=voice_id)
+                        logger.info(f"Restored database language preference: {voice_id}")
                     except Exception as e:
                         logger.error(f"Failed to update TTS voice: {e}")
             else:
                 self.current_language = "English"
                 if self.agent_session:
                     try:
-                        self.agent_session.tts.update_options(voice="Anisha")
-                        logger.info("Restored database language preference: Anisha")
+                        from agent import get_voice_for_agent
+                    except ImportError:
+                        # pyrefly: ignore [missing-import]
+                        from src.agent import get_voice_for_agent
+                    try:
+                        voice_id = get_voice_for_agent(self.__class__.__name__, "English")
+                        self.agent_session.tts.update_options(voice=voice_id)
+                        logger.info(f"Restored database language preference: {voice_id}")
                     except Exception as e:
                         logger.error(f"Failed to update TTS voice: {e}")
             return f"Caller found: {caller}"

@@ -16,10 +16,10 @@ except ImportError:
     from src.db_dashboard import record_handoff  # type: ignore
 
 try:
-    from agent import Assistant
+    from agent import Assistant, get_voice_for_agent
 except ImportError:
     # pyrefly: ignore [missing-import]
-    from src.agent import Assistant
+    from src.agent import Assistant, get_voice_for_agent
 
 logger = logging.getLogger("agent.krishna")
 
@@ -30,7 +30,7 @@ class GovernmentSchemeSpecialist(Assistant):
         self._instructions = GOVERNMENT_SCHEME_SPECIALIST_PROMPT
         self.call_id = call_id
         self.escalation_prefix = "KRI"
-        self.voice = "Samar"
+        self.voice = "en-IN-rohan"
         # Filter out self-handoff tool so Krishna cannot trigger a handoff to himself
         self._tools = [
             t
@@ -46,12 +46,12 @@ class GovernmentSchemeSpecialist(Assistant):
             )
             self.call_id = self.session.userdata.get("call_id", self.call_id)
 
-            # Set Krishna's voice to Samar (Indian male voice)
+            voice_id = get_voice_for_agent(self.__class__.__name__, self.current_language)
             try:
-                self.session.tts.update_options(voice="Samar")
-                logger.info("Krishna: voice updated to Samar.")
+                self.session.tts.update_options(voice=voice_id)
+                logger.info(f"Krishna: voice updated to {voice_id}.")
             except Exception as e:
-                logger.error(f"Krishna: failed to update TTS voice to Samar: {e}")
+                logger.error(f"Krishna: failed to update TTS voice to {voice_id}: {e}")
 
             if self.room and self.room.local_participant:
                 try:
